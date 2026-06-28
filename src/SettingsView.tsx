@@ -246,7 +246,8 @@ function SettingsView({ settings, onUpdateSettings, onBack }: SettingsViewProps)
           <label htmlFor="allow-unchanged-clipboard">תרגם גם אם הלוח לא השתנה</label>
         </div>
         <span className="field__hint">
-          שימושי אם סימנת טקסט שזהה למה שכבר היה בלוח, אבל עלול לתרגם בטעות תוכן ישן.
+          אם קיצור המקשים לא הצליח לזהות שינוי בלוח, התוכנה תתרגם את הטקסט שכבר נמצא
+          בלוח. שימושי למי שמעתיק טקסט לפני התרגום.
         </span>
       </section>
 

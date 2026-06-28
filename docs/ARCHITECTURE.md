@@ -78,24 +78,36 @@
 
 1. המשתמש מסמן טקסט באפליקציה כלשהי במחשב.
 2. המשתמש לוחץ על קיצור המקשים הגלובלי (ברירת מחדל `Ctrl+Shift+T`), הנרשם
-   ע"י Rust דרך `tauri-plugin-global-shortcut`.
-3. `capture_selected_text_via_shortcut` ב-Rust:
+   ע"י Rust דרך `tauri-plugin-global-shortcut`. ה-handler מריץ את הלכידה
+   ב-`thread::spawn` נפרד, כדי לא לחסום את ה-event loop של ה-hotkey למשך
+   כל הפולינג.
+3. `capture_selected_text_via_shortcut` ב-Rust (**לא** מציגה/מפוקסת שום חלון
+   — הפוקוס באפליקציה החיצונית נשאר כפי שהיה):
    a. קוראת את הלוח הנוכחי (`old_text`) **לפני** כל פעולה.
-   b. שולחת `Ctrl+C` סינתטי (`enigo`).
-   c. עושה פולינג קצר על הלוח — כל 50ms, עד 700ms בסך הכול — ובודקת אם
-      התוכן השתנה לעומת `old_text`.
-   d. אם נמצא תוכן שונה ולא ריק — זה הטקסט שסומן, מוחזר ומשמש לתרגום.
-   e. אם הלוח לא השתנה בזמן הפולינג — **לא** מתורגם `old_text` כברירת מחדל
-      (זה היה ה-bug — תרגום בטעות של תוכן לוח ישן). אם המשתמש הפעיל את
-      ההגדרה `allowUnchangedClipboardFallback` ("תרגם גם אם הלוח לא השתנה")
-      והלוח הישן לא היה ריק — רק אז מוחזר `old_text`.
-4. Rust מציג את חלון ה-popup ושולח אירוע `selected-text` עם הטקסט (או מחרוזת
-   ריקה, אם לא נמצא טקסט מסומן).
+   b. מחכה `PRE_COPY_DELAY_MS`=120ms — כדי לתת לקיצור המקשים הגלובלי
+      "להשתקע" ולמקשי Ctrl/Shift הפיזיים סיכוי לעלות.
+   c. `send_clean_copy_keystroke()`: משחררת קודם Shift ו-Alt באופן סינתטי
+      (מנקה מצב "לחוץ" שעלול להישאר תקוע מה-hotkey עצמו — אחרת ה-Ctrl+C
+      הסינתטי עלול להתערבב עם Shift עדיין-לחוץ ולהפוך ל-Ctrl+Shift+C, שזה
+      לא "העתק"), ואז שולחת Ctrl+C אמיתי.
+   d. עושה פולינג על הלוח — כל 50ms, עד 1400ms בסך הכול — ובודקת אם התוכן
+      השתנה לעומת `old_text`.
+   e. אם נמצא תוכן שונה ולא ריק — זה הטקסט שסומן, מוחזר עם `usedFallback=false`.
+   f. אם הלוח לא השתנה בזמן הפולינג: אם `allowUnchangedClipboardFallback`
+      מופעל (**ברירת מחדל: כן**) והלוח הישן לא ריק — מוחזר `old_text` עם
+      `usedFallback=true`. אחרת מוחזר `None`.
+4. Rust מציג את חלון ה-popup **רק בסוף השלב הזה** (לא לפניו) ושולח אירוע
+   `selected-text` עם `{ text, usedFallback }`.
 5. `PopupApp` (React) מקבל את האירוע. טקסט ריק → "לא נמצא טקסט מסומן לתרגום.
    סמן טקסט ונסה שוב." טקסט לא ריק → קורא ל-`translateWithSettings` (אותה
-   פונקציה משותפת עם מסך התרגום הראשי) ומציג תוצאה/שגיאה.
+   פונקציה משותפת עם מסך התרגום הראשי) ומציג תוצאה/שגיאה. אם `usedFallback`
+   — מוצגת גם הערה "הטקסט תורגם מהלוח כי הלוח לא השתנה."
 6. המשתמש יכול להעתיק את התרגום, לסגור את הפופאפ, או לפתוח הגדרות (פותח את
    חלון `main` ושולח אליו `navigate-settings`).
+
+דיאגנוסטיקה (debug build בלבד, `#[cfg(debug_assertions)]`, לעולם לא טקסט
+מלא/מפתחות): `foreground window captured`, אורך לוח ישן/חדש, `copy command
+sent`, `clipboard changed`, `fallback used`, `capture duration ms`.
 
 **זרימה נפרדת ומכוונת:** "תרגם טקסט מהלוח" בתפריט המגש קוראת ל-
 `translate_current_clipboard` — מתרגמת את תוכן הלוח הנוכחי **בלי** שום
@@ -127,7 +139,7 @@ interface AppSettings {
   globalShortcut: string;     // default: "Ctrl+Shift+T"
   autoCopyResult: boolean;
   popupPosition: "cursor" | "center";
-  allowUnchangedClipboardFallback: boolean; // default: false — ראו זרימת קיצור המקשים למעלה
+  allowUnchangedClipboardFallback: boolean; // default: true — ראו זרימת קיצור המקשים למעלה
 }
 ```
 

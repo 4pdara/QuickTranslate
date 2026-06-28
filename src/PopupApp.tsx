@@ -13,23 +13,28 @@ type PopupState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "empty" }
-  | { kind: "success"; text: string }
+  | { kind: "success"; text: string; usedFallback: boolean }
   | { kind: "error"; message: string };
+
+interface SelectedTextPayload {
+  text: string;
+  usedFallback: boolean;
+}
 
 function PopupApp() {
   const [state, setState] = useState<PopupState>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const unlistenPromise = listen<string>("selected-text", (event) => {
-      void runTranslation(event.payload);
+    const unlistenPromise = listen<SelectedTextPayload>("selected-text", (event) => {
+      void runTranslation(event.payload.text, event.payload.usedFallback);
     });
     return () => {
       void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
-  async function runTranslation(rawText: string) {
+  async function runTranslation(rawText: string, usedFallback: boolean) {
     const text = rawText.trim();
     setCopied(false);
 
@@ -47,7 +52,7 @@ function PopupApp() {
         : settings.targetLanguage;
       const result = await translateWithSettings(settings, text, settings.sourceLanguage, effectiveTarget);
 
-      setState({ kind: "success", text: result.translatedText });
+      setState({ kind: "success", text: result.translatedText, usedFallback });
 
       if (settings.autoCopyResult) {
         await writeText(result.translatedText);
@@ -83,6 +88,9 @@ function PopupApp() {
         {state.kind === "success" && (
           <>
             <p className="popup__result">{state.text}</p>
+            {state.usedFallback && (
+              <p className="popup__hint">הטקסט תורגם מהלוח כי הלוח לא השתנה.</p>
+            )}
             {copied && <p className="popup__copied">הועתק ללוח ✓</p>}
           </>
         )}

@@ -3906,6 +3906,7 @@ dependencies = [
  "tauri-plugin-http",
  "tauri-plugin-opener",
  "tauri-plugin-store",
+ "windows",
 ]
 
 [[package]]

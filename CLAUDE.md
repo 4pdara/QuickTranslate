@@ -59,23 +59,38 @@ QuickTranslate Desktop היא אפליקציית שולחן עבודה **קלה 
 המשתמש.** הוא רק קורא ממנו. שמירה על היסטוריית הלוח של המשתמש היא דרישת
 מוצר קשה (hard requirement), לא Nice-to-have.
 
-הלוגיקה ב-`src-tauri/src/lib.rs`:
+**גרסה שנייה של התיקון (חשובה):** הגרסה הראשונה (Ctrl+C מיידי + פולינג
+700ms) עדיין נכשלה במקרים רבים. הסיבה: ברגע שה-hotkey `Ctrl+Shift+T` נדלק,
+המשתמש עדיין מחזיק פיזית Ctrl+Shift. אם שולחים Ctrl+C סינתטי באותו רגע, ה-OS
+עלול לפרש את זה כ-**Ctrl+Shift+C** (כי ה-Shift הפיזי עדיין למעלה) — שזה לא
+"העתק" באף אפליקציה. התיקון:
 
-1. `capture_selected_text_via_shortcut(app, allow_unchanged_fallback)`:
+1. `capture_selected_text_via_shortcut(app, allow_unchanged_fallback)`
+   (רץ ב-thread נפרד, לא חוסם את ה-event loop של ה-hotkey):
    - קוראת את הלוח **לפני** הכל (`old_text`).
-   - שולחת Ctrl+C סינתטי (`enigo`).
-   - עושה **פולינג קצר** על הלוח (כל `CLIPBOARD_POLL_INTERVAL_MS`=50ms, עד
-     `CLIPBOARD_POLL_MAX_MS`=700ms בסך הכול) ובודקת אם התוכן השתנה.
-   - אם נמצא תוכן חדש ולא ריק — זה הטקסט שסומן, ומוחזר.
-   - אם הלוח **לא** השתנה — מוחזר `None` (כברירת מחדל), **לא** מתורגם תוכן
-     ישן. רק אם המשתמש הפעיל מפורשות את ההגדרה `allowUnchangedClipboardFallback`
-     ("תרגם גם אם הלוח לא השתנה"), והלוח הישן לא היה ריק — מוחזר התוכן הישן.
+   - **לא מציגה/מפוקסת שום חלון** — הפוקוס באפליקציה החיצונית לא משתנה.
+   - מחכה `PRE_COPY_DELAY_MS`=120ms (לתת ל-hotkey "להשתקע").
+   - `send_clean_copy_keystroke()`: משחררת קודם Shift ו-Alt באופן סינתטי
+     (כדי לנקות מצב "לחוץ" שעלול להישאר מה-hotkey), ואז שולחת Ctrl+C אמיתי.
+   - עושה **פולינג** על הלוח (כל `CLIPBOARD_POLL_INTERVAL_MS`=50ms, עד
+     `CLIPBOARD_POLL_MAX_MS`=1400ms בסך הכול) ובודקת אם התוכן השתנה.
+   - אם נמצא תוכן חדש ולא ריק — זה הטקסט שסומן, מוחזר עם `usedFallback=false`.
+   - אם הלוח **לא** השתנה: אם `allowUnchangedClipboardFallback` מופעל (ברירת
+     המחדל **כן**, ראו למטה) והלוח הישן לא ריק — מוחזר הלוח הישן עם
+     `usedFallback=true`. אחרת מוחזר `None`.
 2. `translate_selected_text_via_shortcut(app)` — ה-handler של Ctrl+Shift+T.
-   קורא לפונקציה הנ"ל ומציג את הפופאפ עם התוצאה (או ריק, שגורם ל-`PopupApp`
-   להציג "לא נמצא טקסט מסומן לתרגום. סמן טקסט ונסה שוב.").
+   קורא לפונקציה הנ"ל **ורק אז** מציג את הפופאפ (`SelectedTextPayload { text,
+   usedFallback }`). אם `text` ריק, `PopupApp` מציג "לא נמצא טקסט מסומן
+   לתרגום. סמן טקסט ונסה שוב." אם `usedFallback=true`, מוצגת הערה: "הטקסט
+   תורגם מהלוח כי הלוח לא השתנה."
 3. `translate_current_clipboard(app)` — **זרימה נפרדת ומכוונת**, בשימוש
    "תרגם טקסט מהלוח" בתפריט המגש. קוראת את הלוח הנוכחי **בלי השוואה** —
    כי כאן הכוונה המפורשת היא לתרגם מה שכבר בלוח.
+
+**`allowUnchangedClipboardFallback` ברירת מחדל = `true`** (שונה מהגרסה
+הקודמת). זה כי המשתמש מעדיף שהקיצור "יעבוד" ויתרגם את הלוח הקיים כש-Ctrl+C
+הסינתטי לא תפס שינוי, על פני שגיאה. ההגדרה עדיין גלויה וניתנת לכיבוי
+בהגדרות ("תרגם גם אם הלוח לא השתנה").
 
 **אסור:** לכתוב marker/placeholder לתוך הלוח כדי "לבדוק" אם הוא השתנה, לאפס
 את הלוח אחרי הקריאה, או להוסיף שום מנגנון restore שיכול לפגוע בהיסטוריית
@@ -84,8 +99,14 @@ QuickTranslate Desktop היא אפליקציית שולחן עבודה **קלה 
 default `false`, ותממש רק אם זה מאומת כבטוח (לא יוצר flicker/delay/נזק
 להיסטוריה). זה **לא** מומש כרגע, בכוונה.
 
-לוגים: לעולם לא לוג של הטקסט המלא או מפתחות API. מותר לוג אורך טקסט בלבד
-(`captured selected text length: N`), ורק בבנייה debug (`#[cfg(debug_assertions)]`).
+תלות חדשה: `windows` crate (`target.'cfg(windows)'.dependencies` ב-
+`Cargo.toml`) עבור `GetForegroundWindow` — לדיאגנוסטיקה בלבד (debug build),
+לא לשינוי פוקוס.
+
+לוגים (debug build בלבד, `#[cfg(debug_assertions)]`): `foreground window
+captured`, `old/new clipboard length` (אורך בלבד, לא תוכן), `copy command
+sent`, `clipboard changed`, `fallback used`, `capture duration ms`. לעולם
+לא לוג של הטקסט המלא או מפתחות API.
 
 ## 5. ארכיטקטורת ספקי תרגום
 
@@ -281,11 +302,17 @@ CLAUDE.md                  # קובץ זה
 - [x] System tray + קיצור מקשים גלובלי + פופאפ — ללא שינוי ארכיטקטוני
 - [x] `tsc --noEmit`, `npm run build`, `cargo check` עוברים
 - [x] אומת שה-release build לא פותח חלון CMD (ראו `docs/NEXT_ACTIONS.md`)
-- [x] תיקון באג קיצור המקשים: השוואת לוח ישן/חדש לפני תרגום, בלי למחוק/לאפס
-      את הלוח (`capture_selected_text_via_shortcut`, `translate_current_clipboard`)
-- [x] הגדרה `allowUnchangedClipboardFallback` ("תרגם גם אם הלוח לא השתנה")
+- [x] תיקון באג קיצור המקשים (סיבוב 1): השוואת לוח ישן/חדש לפני תרגום, בלי
+      למחוק/לאפס את הלוח
+- [x] תיקון באג קיצור המקשים (סיבוב 2 — השורש האמיתי): שחרור Shift/Alt
+      סינתטי לפני Ctrl+C (מנע התנגשות עם Ctrl+Shift+C), השהיה 120ms,
+      פולינג עד 1400ms, לכידה ב-thread נפרד, פופאפ מוצג רק אחרי הלכידה
+- [x] `allowUnchangedClipboardFallback` — ברירת מחדל **שונתה ל-true**, עם
+      הערה "הטקסט תורגם מהלוח כי הלוח לא השתנה" כשבשימוש
+- [x] דיאגנוסטיקת debug build (אורכים בלבד, לא תוכן/מפתחות)
 - [ ] בדיקה ידנית מלאה עם מפתח API/שרת אמיתי לכל ספק
-- [ ] בדיקה ידנית של הקיצור מול דפדפן/Notepad בפועל (זמין רק למשתמש, לא לסוכן)
+- [ ] בדיקה ידנית של הקיצור מול דפדפן/Notepad בפועל (זמין רק למשתמש, לא לסוכן —
+      ראו 3 תרחישי בדיקה מדויקים ב-`docs/NEXT_ACTIONS.md`)
 - [ ] קיצור מקשים דינמי בלי הפעלה מחדש
 - [ ] פופאפ סמוך לעכבר
 - [ ] `preserveClipboardAfterShortcut` (שמירת לוח מקורי) — נדחה בכוונה, ראו סעיף 4א

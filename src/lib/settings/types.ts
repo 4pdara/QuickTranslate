@@ -8,7 +8,10 @@ export interface AppSettings {
   globalShortcut: string;
   autoCopyResult: boolean;
   popupPosition: "cursor" | "center";
-  /** תרגם גם אם הלוח לא השתנה אחרי Ctrl+C סינתטי (קיצור מקשים). ברירת מחדל: false. */
+  /**
+   * תרגם גם אם הלוח לא השתנה אחרי Ctrl+C סינתטי (קיצור מקשים).
+   * ברירת מחדל: true — שימושי למי שמעתיק טקסט לפני התרגום.
+   */
   allowUnchangedClipboardFallback: boolean;
 }
 
@@ -22,5 +25,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   globalShortcut: "Ctrl+Shift+T",
   autoCopyResult: false,
   popupPosition: "center",
-  allowUnchangedClipboardFallback: false,
+  allowUnchangedClipboardFallback: true,
 };
