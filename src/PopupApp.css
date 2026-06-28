@@ -1,0 +1,77 @@
+:root {
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  font-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+}
+
+.popup {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100vh;
+  padding: 0.9rem 1rem;
+  background: #ffffff;
+  border: 1px solid #d8d8e0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.popup__body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.popup__hint {
+  color: #777;
+  margin: 0;
+}
+
+.popup__error {
+  color: #c0392b;
+  margin: 0;
+}
+
+.popup__result {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.popup__copied {
+  margin: 0.4rem 0 0 0;
+  color: #1a8a4c;
+  font-size: 0.8rem;
+}
+
+.popup__actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-block-start: 0.7rem;
+  justify-content: flex-end;
+}
+
+button {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: #4a6cf7;
+  color: #fff;
+}
+
+button.secondary {
+  background: #eceef5;
+  color: #2a2a2a;
+}
