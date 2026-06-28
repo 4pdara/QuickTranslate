@@ -13,10 +13,12 @@
 - [x] באנר "ספק חסר" במסך התרגום עם כפתור "פתח הגדרות", במקום לחסום את המסך
 - [x] System tray (אייקון + תפריט)
 - [x] קיצור מקשים גלובלי (default `Ctrl+Shift+T`)
-- [x] תרגום טקסט מסומן דרך זרימת קליפבורד (קיצור מקשים → פופאפ), עם שחרור
-      Shift/Alt סינתטי לפני Ctrl+C, פולינג עד 1400ms, ובלי למחוק/לאפס את הלוח
-- [x] הגדרה `allowUnchangedClipboardFallback` ("תרגם גם אם הלוח לא השתנה"),
-      ברירת מחדל **כן**, עם הערה למשתמש כשהיא בשימוש בפועל
+- [x] **SelectedTextCaptureEngine**: לכידת טקסט מסומן ישירות (Windows UI
+      Automation, בלי לוח כלל) כשיטה ראשית; fallback ללוח (Ctrl+C + פולינג)
+      אופציונלי וכבוי כברירת מחדל
+- [x] הגדרות `captureSelectedTextWithoutClipboard` (default true),
+      `allowClipboardFallbackForSelectedText` (default false),
+      `allowUnchangedClipboardFallback` (default true, תת-הגדרה)
 - [x] תרגום ידני בתוך המסך הראשי (הקלדה/הדבקה → תרגם → תוצאה בפאנל יעד)
 - [x] בחירת שפת מקור/יעד + כפתור החלפת שפות במסך הראשי
 - [x] זיהוי כיוון עברית/אנגלית אוטומטי (`autoDetectDirection`)

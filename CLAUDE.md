@@ -53,60 +53,79 @@ QuickTranslate Desktop היא אפליקציית שולחן עבודה **קלה 
 **לא** חלונות Tauri נפרדים. Rust שולח אירוע `navigate-settings` לחלון הראשי
 כשצריך לפתוח את מסך ההגדרות מבחוץ (תפריט מגש / פופאפ).
 
-### 4א. זרימת לכידת טקסט מסומן (Ctrl+Shift+T) — חשוב, אל תשנה בלי לקרוא
+### 4א. SelectedTextCaptureEngine — לכידת טקסט מסומן (Ctrl+Shift+T) — חשוב, אל תשנה בלי לקרוא
 
 **עקרון יסוד: קיצור המקשים הגלובלי לעולם לא מוחק, מאפס, או מחליף את הלוח של
-המשתמש.** הוא רק קורא ממנו. שמירה על היסטוריית הלוח של המשתמש היא דרישת
-מוצר קשה (hard requirement), לא Nice-to-have.
+המשתמש.** הוא רק קורא ממנו (ורק אם בכלל מגיע לשלב הקריאה מהלוח). שמירה על
+היסטוריית הלוח של המשתמש היא דרישת מוצר קשה (hard requirement).
 
-**גרסה שנייה של התיקון (חשובה):** הגרסה הראשונה (Ctrl+C מיידי + פולינג
-700ms) עדיין נכשלה במקרים רבים. הסיבה: ברגע שה-hotkey `Ctrl+Shift+T` נדלק,
-המשתמש עדיין מחזיק פיזית Ctrl+Shift. אם שולחים Ctrl+C סינתטי באותו רגע, ה-OS
-עלול לפרש את זה כ-**Ctrl+Shift+C** (כי ה-Shift הפיזי עדיין למעלה) — שזה לא
-"העתק" באף אפליקציה. התיקון:
+**היסטוריה קצרה (חשובה כדי לא לחזור על טעויות):**
+1. גרסה 1: Ctrl+C מיידי + פולינג 700ms על הלוח — נכשלה כי Shift הפיזי עדיין
+   היה לחוץ ברגע שליחת ה-Ctrl+C, וה-OS קלט בפועל Ctrl+Shift+C.
+2. גרסה 2: השהיה 120ms + שחרור סינתטי של Shift/Alt לפני Ctrl+C + פולינג
+   1400ms — שיפרה אבל **עדיין מבוססת לוח**, ועדיין יכולה לפספס באפליקציות
+   שאיטיות להגיב להעתקה.
+3. **גרסה 3 (נוכחית) — `SelectedTextCaptureEngine`:** במקום לדלג ישר ל-Ctrl+C,
+   מנסים קודם לקרוא את הטקסט המסומן **ישירות מהאלמנט הממוקד**, בלי לגעת
+   בלוח בכלל, באמצעות Windows UI Automation. רק אם זה נכשל/לא נתמך, ולפי
+   הגדרות המשתמש, עוברים ל-fallback מבוסס לוח (אותה לוגיקה מגרסה 2, ללא
+   שינוי).
 
-1. `capture_selected_text_via_shortcut(app, allow_unchanged_fallback)`
-   (רץ ב-thread נפרד, לא חוסם את ה-event loop של ה-hotkey):
-   - קוראת את הלוח **לפני** הכל (`old_text`).
-   - **לא מציגה/מפוקסת שום חלון** — הפוקוס באפליקציה החיצונית לא משתנה.
-   - מחכה `PRE_COPY_DELAY_MS`=120ms (לתת ל-hotkey "להשתקע").
-   - `send_clean_copy_keystroke()`: משחררת קודם Shift ו-Alt באופן סינתטי
-     (כדי לנקות מצב "לחוץ" שעלול להישאר מה-hotkey), ואז שולחת Ctrl+C אמיתי.
-   - עושה **פולינג** על הלוח (כל `CLIPBOARD_POLL_INTERVAL_MS`=50ms, עד
-     `CLIPBOARD_POLL_MAX_MS`=1400ms בסך הכול) ובודקת אם התוכן השתנה.
-   - אם נמצא תוכן חדש ולא ריק — זה הטקסט שסומן, מוחזר עם `usedFallback=false`.
-   - אם הלוח **לא** השתנה: אם `allowUnchangedClipboardFallback` מופעל (ברירת
-     המחדל **כן**, ראו למטה) והלוח הישן לא ריק — מוחזר הלוח הישן עם
-     `usedFallback=true`. אחרת מוחזר `None`.
-2. `translate_selected_text_via_shortcut(app)` — ה-handler של Ctrl+Shift+T.
-   קורא לפונקציה הנ"ל **ורק אז** מציג את הפופאפ (`SelectedTextPayload { text,
-   usedFallback }`). אם `text` ריק, `PopupApp` מציג "לא נמצא טקסט מסומן
-   לתרגום. סמן טקסט ונסה שוב." אם `usedFallback=true`, מוצגת הערה: "הטקסט
-   תורגם מהלוח כי הלוח לא השתנה."
-3. `translate_current_clipboard(app)` — **זרימה נפרדת ומכוונת**, בשימוש
-   "תרגם טקסט מהלוח" בתפריט המגש. קוראת את הלוח הנוכחי **בלי השוואה** —
-   כי כאן הכוונה המפורשת היא לתרגם מה שכבר בלוח.
+**מבנה הקוד:** `src-tauri/src/capture/`
+- `mod.rs` — `CaptureMethod` (`UiAutomation`/`ClipboardFallback`/`Failed`),
+  `CaptureResult { success, text, method, reason, duration_ms }`.
+- `selected_text.rs` — `capture_selected_text(app, CaptureOptions) -> CaptureResult`,
+  נקודת הכניסה היחידה. מנסה UI Automation, ואז (אם מורשה) clipboard fallback.
+- `windows_ui_automation.rs` (`#[cfg(windows)]`) — `try_capture_selected_text()`:
+  פותח COM (`CoInitializeEx`/STA) על ה-thread הנוכחי, `IUIAutomation::GetFocusedElement()`,
+  `GetCurrentPatternAs::<IUIAutomationTextPattern>(UIA_TextPatternId)`,
+  `GetSelection()` → `IUIAutomationTextRangeArray` → `GetText(-1)` על כל טווח.
+  **לא נוגעת בלוח בכלל.** אם האלמנט הממוקד לא תומך ב-TextPattern (controls
+  מותאמים/canvas/חלק מ-Electron) — נכשלת בנקיון עם הודעת שגיאה מפורשת,
+  **לא** מתחזה להצלחה ע"י קריאה מהלוח.
+- `clipboard_fallback.rs` — `capture_via_clipboard` (השהיה+שחרור מקשים+פולינג,
+  כמו בגרסה 2) ו-`read_current_clipboard` (לתפריט המגש).
 
-**`allowUnchangedClipboardFallback` ברירת מחדל = `true`** (שונה מהגרסה
-הקודמת). זה כי המשתמש מעדיף שהקיצור "יעבוד" ויתרגם את הלוח הקיים כש-Ctrl+C
-הסינתטי לא תפס שינוי, על פני שגיאה. ההגדרה עדיין גלויה וניתנת לכיבוי
-בהגדרות ("תרגם גם אם הלוח לא השתנה").
+**זרימה ב-`lib.rs` (`translate_selected_text_via_shortcut`, רצה ב-thread נפרד):**
+1. בונה `CaptureOptions` מההגדרות: `try_without_clipboard`
+   (`captureSelectedTextWithoutClipboard`, default **true**),
+   `allow_clipboard_fallback` (`allowClipboardFallbackForSelectedText`,
+   default **false**), `allow_unchanged_clipboard_fallback`
+   (`allowUnchangedClipboardFallback`, default **true**, תקף רק כתת-הגדרה
+   בתוך ה-fallback).
+2. קוראת ל-`capture_selected_text`. **לא מציגה/מפוקסת שום חלון לפני זה** —
+   הפוקוס באפליקציה החיצונית לא משתנה עד שהלכידה מסתיימת.
+3. אם הצליחה (כל שיטה) — מציגה פופאפ עם `SelectedTextPayload { text,
+   usedFallback, captureMethod, captureFailedNoFallback }`.
+4. אם נכשלה **וגם** `allowClipboardFallbackForSelectedText=false` —
+   `captureFailedNoFallback=true`, ו-`PopupApp` מציג: "לא הצלחתי לקרוא את
+   הטקסט המסומן באפליקציה הזו. אפשר להפעיל fallback ללוח בהגדרות." (עם כפתור
+   "הגדרות" שכבר קיים בפופאפ).
+5. אם נכשלה אחרי שגם ה-fallback ללוח נוסה ולא מצא כלום — הודעה גנרית:
+   "לא נמצא טקסט מסומן לתרגום. סמן טקסט ונסה שוב."
+6. `translate_current_clipboard(app)` — **זרימה נפרדת ומכוונת** (תפריט מגש
+   "תרגם טקסט מהלוח"), קוראת את הלוח הנוכחי בלי שום השוואה/לוגיקת capture.
 
-**אסור:** לכתוב marker/placeholder לתוך הלוח כדי "לבדוק" אם הוא השתנה, לאפס
-את הלוח אחרי הקריאה, או להוסיף שום מנגנון restore שיכול לפגוע בהיסטוריית
-לוח (clipboard history) של Windows. אם בעתיד תרצה "שמירת לוח מקורי לאחר
-קיצור מקשים" (`preserveClipboardAfterShortcut`) — הוסף הגדרה חדשה,
-default `false`, ותממש רק אם זה מאומת כבטוח (לא יוצר flicker/delay/נזק
-להיסטוריה). זה **לא** מומש כרגע, בכוונה.
+**מגבלה ידועה ומתועדת — לא הבטחה אוניברסלית:** UI Automation עובד רק
+באלמנטים שמיישמים `ITextProvider`/`TextPattern`. עובד היטב ב-Notepad, רוב
+תיבות טקסט סטנדרטיות של Windows, WPF, ורוב הדפדפנים המודרניים (Chrome/Edge/
+Firefox) על אזורי טקסט/contenteditable. **לא יעבוד** באפליקציות עם רינדור
+מותאם (canvas, חלק מ-Electron/Qt/משחקים) — שם, אם המשתמש הפעיל את ה-fallback
+ללוח, עדיין יש רשת ביטחון; אם לא — תוצג שגיאה ברורה, לא "תרגום שקט" שגוי.
 
-תלות חדשה: `windows` crate (`target.'cfg(windows)'.dependencies` ב-
-`Cargo.toml`) עבור `GetForegroundWindow` — לדיאגנוסטיקה בלבד (debug build),
-לא לשינוי פוקוס.
+**אסור:** לכתוב marker/placeholder לתוך הלוח, לאפס את הלוח אחרי קריאה, או
+להוסיף מנגנון restore שיכול לפגוע בהיסטוריית לוח (clipboard history) של
+Windows. `preserveClipboardAfterShortcut` **לא** מומש כרגע, בכוונה — רק אם
+ימצא מימוש בטוח שלא פוגע ב-flicker/בהיסטוריה.
 
-לוגים (debug build בלבד, `#[cfg(debug_assertions)]`): `foreground window
-captured`, `old/new clipboard length` (אורך בלבד, לא תוכן), `copy command
-sent`, `clipboard changed`, `fallback used`, `capture duration ms`. לעולם
-לא לוג של הטקסט המלא או מפתחות API.
+תלות חדשה: `windows` crate, `target.'cfg(windows)'.dependencies` ב-
+`Cargo.toml`, פיצ'רים: `Win32_UI_WindowsAndMessaging`, `Win32_Foundation`,
+`Win32_UI_Accessibility`, `Win32_System_Com`.
+
+לוגים (debug build בלבד, `#[cfg(debug_assertions)]`, לעולם לא טקסט מלא/מפתחות):
+`foreground window captured` (בוליאני בלבד, לא הכותרת — יכולה להכיל תוכן
+רגיש), `capture method attempted`, `capture success`, `selected text length`,
+`capture reason` (סיבת כשל טכנית, לא תוכן), `capture duration ms`.
 
 ## 5. ארכיטקטורת ספקי תרגום
 
@@ -275,8 +294,13 @@ src/
   lib/settings/               # מודל הגדרות וגישה אליהן (tauri-plugin-store)
   lib/scriptDetect.ts          # זיהוי כיוון עברית/אנגלית אוטומטי
 src-tauri/
-  src/lib.rs                   # tray, קיצור מקשים, קליפבורד, חלונות, אירועים
+  src/lib.rs                   # tray, קיצור מקשים, חלונות, אירועים, הגדרות
   src/main.rs                   # entry point + windows_subsystem
+  src/capture/                  # SelectedTextCaptureEngine (ראו סעיף 4א)
+    mod.rs
+    selected_text.rs
+    windows_ui_automation.rs    # #[cfg(windows)]
+    clipboard_fallback.rs
   tauri.conf.json
   capabilities/default.json
 docs/
@@ -310,9 +334,18 @@ CLAUDE.md                  # קובץ זה
 - [x] `allowUnchangedClipboardFallback` — ברירת מחדל **שונתה ל-true**, עם
       הערה "הטקסט תורגם מהלוח כי הלוח לא השתנה" כשבשימוש
 - [x] דיאגנוסטיקת debug build (אורכים בלבד, לא תוכן/מפתחות)
+- [x] **SelectedTextCaptureEngine** (סיבוב 3): לכידה ישירה ללא לוח באמצעות
+      Windows UI Automation (`src-tauri/src/capture/windows_ui_automation.rs`),
+      עם clipboard fallback אופציונלי (כבוי כברירת מחדל) רק כשהלכידה הישירה נכשלת
+- [x] הגדרות חדשות: `captureSelectedTextWithoutClipboard` (default true),
+      `allowClipboardFallbackForSelectedText` (default false); סקשן הגדרות
+      "לכידת טקסט מסומן" ב-`SettingsView`
+- [x] הודעת שגיאה ספציפית כש-UI Automation נכשל וה-fallback כבוי: "לא הצלחתי
+      לקרוא את הטקסט המסומן באפליקציה הזו. אפשר להפעיל fallback ללוח בהגדרות."
+- [x] `cargo check`/`cargo check --release` נקיים מאזהרות; `npm run tauri build` עובר
 - [ ] בדיקה ידנית מלאה עם מפתח API/שרת אמיתי לכל ספק
 - [ ] בדיקה ידנית של הקיצור מול דפדפן/Notepad בפועל (זמין רק למשתמש, לא לסוכן —
-      ראו 3 תרחישי בדיקה מדויקים ב-`docs/NEXT_ACTIONS.md`)
+      ראו 5 תרחישי בדיקה מדויקים ב-`docs/NEXT_ACTIONS.md`)
 - [ ] קיצור מקשים דינמי בלי הפעלה מחדש
 - [ ] פופאפ סמוך לעכבר
 - [ ] `preserveClipboardAfterShortcut` (שמירת לוח מקורי) — נדחה בכוונה, ראו סעיף 4א

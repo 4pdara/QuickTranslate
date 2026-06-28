@@ -72,47 +72,59 @@
 4. התוצאה (או שגיאה בעברית) מוצגת בפאנל היעד. אם `autoCopyResult` פעיל,
    התרגום מועתק אוטומטית ללוח.
 
-## זרימת תרגום מטקסט מסומן (קיצור מקשים גלובלי)
+## זרימת תרגום מטקסט מסומן (קיצור מקשים גלובלי) — SelectedTextCaptureEngine
 
 **עקרון יסוד: לעולם לא מוחקים/מאפסים/מחליפים את הלוח של המשתמש — רק קוראים ממנו.**
 
 1. המשתמש מסמן טקסט באפליקציה כלשהי במחשב.
 2. המשתמש לוחץ על קיצור המקשים הגלובלי (ברירת מחדל `Ctrl+Shift+T`), הנרשם
    ע"י Rust דרך `tauri-plugin-global-shortcut`. ה-handler מריץ את הלכידה
-   ב-`thread::spawn` נפרד, כדי לא לחסום את ה-event loop של ה-hotkey למשך
-   כל הפולינג.
-3. `capture_selected_text_via_shortcut` ב-Rust (**לא** מציגה/מפוקסת שום חלון
-   — הפוקוס באפליקציה החיצונית נשאר כפי שהיה):
-   a. קוראת את הלוח הנוכחי (`old_text`) **לפני** כל פעולה.
-   b. מחכה `PRE_COPY_DELAY_MS`=120ms — כדי לתת לקיצור המקשים הגלובלי
-      "להשתקע" ולמקשי Ctrl/Shift הפיזיים סיכוי לעלות.
-   c. `send_clean_copy_keystroke()`: משחררת קודם Shift ו-Alt באופן סינתטי
-      (מנקה מצב "לחוץ" שעלול להישאר תקוע מה-hotkey עצמו — אחרת ה-Ctrl+C
-      הסינתטי עלול להתערבב עם Shift עדיין-לחוץ ולהפוך ל-Ctrl+Shift+C, שזה
-      לא "העתק"), ואז שולחת Ctrl+C אמיתי.
-   d. עושה פולינג על הלוח — כל 50ms, עד 1400ms בסך הכול — ובודקת אם התוכן
-      השתנה לעומת `old_text`.
-   e. אם נמצא תוכן שונה ולא ריק — זה הטקסט שסומן, מוחזר עם `usedFallback=false`.
-   f. אם הלוח לא השתנה בזמן הפולינג: אם `allowUnchangedClipboardFallback`
-      מופעל (**ברירת מחדל: כן**) והלוח הישן לא ריק — מוחזר `old_text` עם
-      `usedFallback=true`. אחרת מוחזר `None`.
-4. Rust מציג את חלון ה-popup **רק בסוף השלב הזה** (לא לפניו) ושולח אירוע
-   `selected-text` עם `{ text, usedFallback }`.
-5. `PopupApp` (React) מקבל את האירוע. טקסט ריק → "לא נמצא טקסט מסומן לתרגום.
-   סמן טקסט ונסה שוב." טקסט לא ריק → קורא ל-`translateWithSettings` (אותה
-   פונקציה משותפת עם מסך התרגום הראשי) ומציג תוצאה/שגיאה. אם `usedFallback`
-   — מוצגת גם הערה "הטקסט תורגם מהלוח כי הלוח לא השתנה."
+   ב-`thread::spawn` נפרד, כדי לא לחסום את ה-event loop של ה-hotkey.
+3. `capture::selected_text::capture_selected_text` (**לא** מציגה/מפוקסת שום
+   חלון — הפוקוס באפליקציה החיצונית נשאר כפי שהיה):
+   a. **שיטה ראשית — UI Automation, בלי לוח כלל** (אם `captureSelectedTextWithoutClipboard`,
+      default true): `windows_ui_automation::try_capture_selected_text()` —
+      פותח COM, מאתר את האלמנט הממוקד כרגע במערכת (`IUIAutomation::GetFocusedElement`),
+      ומנסה לקבל את הטקסט המסומן ממנו דרך `TextPattern::GetSelection()`.
+      אם הצליח ויש טקסט לא-ריק — זהו, מסתיים כאן. אם האלמנט לא תומך
+      ב-TextPattern או אין בחירה — נכשל בנקיון (לא ממשיך לשקר עם תוכן מהלוח).
+   b. **שיטה משנית — fallback ללוח** (רק אם `allowClipboardFallbackForSelectedText=true`,
+      default **false**): `clipboard_fallback::capture_via_clipboard` — קוראת
+      את הלוח הנוכחי (`old_text`), מחכה 120ms, משחררת Shift/Alt סינתטית
+      (כדי שה-Ctrl+C לא יתערבב עם מקשים פיזיים עדיין-לחוצים מה-hotkey ויהפוך
+      בטעות ל-Ctrl+Shift+C), שולחת Ctrl+C אמיתי, ועושה פולינג על הלוח (50ms,
+      עד 1400ms) עד שמוצאת תוכן ששונה מ-`old_text`. אם לא השתנה כלל ו-
+      `allowUnchangedClipboardFallback` מופעל (default **כן**, תקף רק כתת-הגדרה
+      כאן) — משתמשת ב-`old_text` בכל זאת (`usedFallback=true`).
+   c. אם שתי השיטות נכשלו — `CaptureResult { success: false, method: Failed }`.
+4. Rust מציג את חלון ה-popup **רק בסוף השלב הזה** ושולח אירוע `selected-text`
+   עם `{ text, usedFallback, captureMethod, captureFailedNoFallback }`.
+   `captureFailedNoFallback=true` אך ורק כש-UI Automation נכשל **וגם**
+   ה-fallback ללוח כבוי בהגדרות.
+5. `PopupApp` (React): טקסט לא ריק → `translateWithSettings` (משותף עם מסך
+   התרגום הראשי). טקסט ריק + `captureFailedNoFallback` → "לא הצלחתי לקרוא
+   את הטקסט המסומן באפליקציה הזו. אפשר להפעיל fallback ללוח בהגדרות." טקסט
+   ריק בלי זה → "לא נמצא טקסט מסומן לתרגום. סמן טקסט ונסה שוב." אם
+   `usedFallback` — מוצגת גם הערה "הטקסט תורגם מהלוח כי הלוח לא השתנה."
 6. המשתמש יכול להעתיק את התרגום, לסגור את הפופאפ, או לפתוח הגדרות (פותח את
    חלון `main` ושולח אליו `navigate-settings`).
 
+**מגבלה מתועדת:** UI Automation לא עובד בכל אפליקציה — רק באלמנטים שמיישמים
+`ITextProvider`/`TextPattern` (Notepad, רוב תיבות הטקסט הסטנדרטיות, WPF,
+ורוב הדפדפנים המודרניים על אזורי טקסט). אפליקציות עם רינדור מותאם (canvas,
+חלק מ-Electron) עלולות לא להחזיר טקסט — שם חשוב להפעיל את ה-fallback ללוח
+אם רוצים רשת ביטחון.
+
 דיאגנוסטיקה (debug build בלבד, `#[cfg(debug_assertions)]`, לעולם לא טקסט
-מלא/מפתחות): `foreground window captured`, אורך לוח ישן/חדש, `copy command
-sent`, `clipboard changed`, `fallback used`, `capture duration ms`.
+מלא/מפתחות): `foreground window captured` (בוליאני, לא הכותרת), `capture
+method attempted`, `capture success`, `selected text length`, `capture
+reason`, `capture duration ms`.
 
 **זרימה נפרדת ומכוונת:** "תרגם טקסט מהלוח" בתפריט המגש קוראת ל-
-`translate_current_clipboard` — מתרגמת את תוכן הלוח הנוכחי **בלי** שום
-השוואה, כי כאן הכוונה היחידה היא לתרגם מה שכבר בלוח. שתי הזרימות נפרדות
-בקוד בכוונה כדי שהקיצור הגלובלי לא "ידלוף" התנהגות של תרגום-לוח-ישן.
+`clipboard_fallback::read_current_clipboard` — מתרגמת את תוכן הלוח הנוכחי
+**בלי** שום השוואה/לוגיקת capture, כי כאן הכוונה היחידה היא לתרגם מה שכבר
+בלוח. שתי הזרימות נפרדות בקוד בכוונה כדי שהקיצור הגלובלי לא "ידלוף" התנהגות
+של תרגום-לוח-ישן.
 
 ## הפשטת ספק תרגום
 
@@ -139,7 +151,9 @@ interface AppSettings {
   globalShortcut: string;     // default: "Ctrl+Shift+T"
   autoCopyResult: boolean;
   popupPosition: "cursor" | "center";
-  allowUnchangedClipboardFallback: boolean; // default: true — ראו זרימת קיצור המקשים למעלה
+  captureSelectedTextWithoutClipboard: boolean; // default: true — UI Automation, ראו למעלה
+  allowClipboardFallbackForSelectedText: boolean; // default: false
+  allowUnchangedClipboardFallback: boolean; // default: true — תת-הגדרה של ה-fallback ללוח
 }
 ```
 
@@ -163,5 +177,7 @@ interface AppSettings {
 - `tauri-plugin-clipboard-manager` — קריאה/כתיבה לקליפבורד
 - `tauri-plugin-store` — הגדרות מקומיות
 - `tauri-plugin-http` — קריאות HTTP מה-frontend (כל הספקים)
-- `enigo` — סימולציית Ctrl+C ללכידת טקסט מסומן
+- `enigo` — סימולציית Ctrl+C ל-fallback ללוח (כשה-UI Automation נכשל/כבוי)
+- `windows` (`cfg(windows)` בלבד) — Windows UI Automation, השיטה הראשית
+  ב-`SelectedTextCaptureEngine`
 - Tray API מובנה ב-Tauri v2 (`tauri::tray`)

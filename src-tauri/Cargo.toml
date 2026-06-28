@@ -29,5 +29,10 @@ enigo = "0.6.1"
 tauri-plugin-http = "2.5.9"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61", features = ["Win32_UI_WindowsAndMessaging", "Win32_Foundation"] }
+windows = { version = "0.61", features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+    "Win32_UI_Accessibility",
+    "Win32_System_Com",
+] }
 

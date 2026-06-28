@@ -12,13 +12,15 @@ import { autoTargetLanguage } from "./lib/scriptDetect";
 type PopupState =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "empty" }
+  | { kind: "empty"; noFallback: boolean }
   | { kind: "success"; text: string; usedFallback: boolean }
   | { kind: "error"; message: string };
 
 interface SelectedTextPayload {
   text: string;
   usedFallback: boolean;
+  captureMethod: "ui_automation" | "clipboard_fallback" | "failed";
+  captureFailedNoFallback: boolean;
 }
 
 function PopupApp() {
@@ -27,19 +29,19 @@ function PopupApp() {
 
   useEffect(() => {
     const unlistenPromise = listen<SelectedTextPayload>("selected-text", (event) => {
-      void runTranslation(event.payload.text, event.payload.usedFallback);
+      void runTranslation(event.payload.text, event.payload.usedFallback, event.payload.captureFailedNoFallback);
     });
     return () => {
       void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
-  async function runTranslation(rawText: string, usedFallback: boolean) {
+  async function runTranslation(rawText: string, usedFallback: boolean, noFallback: boolean) {
     const text = rawText.trim();
     setCopied(false);
 
     if (!text) {
-      setState({ kind: "empty" });
+      setState({ kind: "empty", noFallback });
       return;
     }
 
@@ -83,7 +85,14 @@ function PopupApp() {
       <div className="popup__body">
         {state.kind === "idle" && <p className="popup__hint">סמן טקסט בכל אפליקציה ולחץ על קיצור המקשים.</p>}
         {state.kind === "loading" && <p className="popup__hint">מתרגם…</p>}
-        {state.kind === "empty" && <p className="popup__error">לא נמצא טקסט מסומן לתרגום. סמן טקסט ונסה שוב.</p>}
+        {state.kind === "empty" &&
+          (state.noFallback ? (
+            <p className="popup__error">
+              לא הצלחתי לקרוא את הטקסט המסומן באפליקציה הזו. אפשר להפעיל fallback ללוח בהגדרות.
+            </p>
+          ) : (
+            <p className="popup__error">לא נמצא טקסט מסומן לתרגום. סמן טקסט ונסה שוב.</p>
+          ))}
         {state.kind === "error" && <p className="popup__error">{state.message}</p>}
         {state.kind === "success" && (
           <>

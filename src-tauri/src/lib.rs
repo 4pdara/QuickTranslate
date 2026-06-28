@@ -1,26 +1,19 @@
-use enigo::{Direction, Enigo, Key, Keyboard, Settings as EnigoSettings};
+mod capture;
+
+use capture::selected_text::{capture_selected_text, CaptureOptions};
+use capture::{clipboard_fallback, CaptureMethod};
 use serde::Serialize;
-#[cfg(debug_assertions)]
-use std::time::Instant;
-use std::{thread, time::Duration};
+use std::thread;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 const POPUP_LABEL: &str = "popup";
 const MAIN_LABEL: &str = "main";
 const DEFAULT_SHORTCUT: &str = "Ctrl+Shift+T";
-
-// השהיה לפני שליחת Ctrl+C, כדי לתת לקיצור המקשים הגלובלי (Ctrl+Shift+T) "להשתקע"
-// ולמקשי Ctrl/Shift הפיזיים סיכוי לעלות. אם לא נחכה, ה-Ctrl+C הסינתטי שלנו
-// עלול להתערבב עם Shift שעדיין לחוץ פיזית ולהפוך בטעות ל-Ctrl+Shift+C.
-const PRE_COPY_DELAY_MS: u64 = 120;
-const CLIPBOARD_POLL_INTERVAL_MS: u64 = 50;
-const CLIPBOARD_POLL_MAX_MS: u64 = 1400;
 
 /// קוראת ערך בודד מתוך הגדרות האפליקציה (settings.json), אם קיים.
 fn read_setting<T>(app: &AppHandle, key: &str, parse: impl Fn(&serde_json::Value) -> Option<T>) -> Option<T> {
@@ -37,22 +30,19 @@ fn configured_shortcut(app: &AppHandle) -> String {
         .unwrap_or_else(|| DEFAULT_SHORTCUT.to_string())
 }
 
-/// קוראת את ההגדרה "תרגם גם אם הלוח לא השתנה".
+/// "נסה לקרוא טקסט מסומן בלי להשתמש בלוח" (UI Automation). ברירת מחדל: כן.
+fn capture_selected_text_without_clipboard(app: &AppHandle) -> bool {
+    read_setting(app, "captureSelectedTextWithoutClipboard", |v| v.as_bool()).unwrap_or(true)
+}
+
+/// "אם לא הצליח — השתמש בלוח ההעתקה" (Ctrl+C fallback). ברירת מחדל: לא.
+fn allow_clipboard_fallback_for_selected_text(app: &AppHandle) -> bool {
+    read_setting(app, "allowClipboardFallbackForSelectedText", |v| v.as_bool()).unwrap_or(false)
+}
+
+/// "תרגם גם אם הלוח לא השתנה" — תקף רק כתת-הגדרה של ה-fallback ללוח.
 fn allow_unchanged_clipboard_fallback(app: &AppHandle) -> bool {
     read_setting(app, "allowUnchangedClipboardFallback", |v| v.as_bool()).unwrap_or(true)
-}
-
-// בשימוש רק לדיאגנוסטיקה בבנייה debug (ראו capture_selected_text_via_shortcut).
-#[cfg(windows)]
-#[allow(dead_code)]
-fn has_foreground_window() -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
-    unsafe { !GetForegroundWindow().0.is_null() }
-}
-
-#[cfg(not(windows))]
-fn has_foreground_window() -> bool {
-    true
 }
 
 fn ensure_popup_window(app: &AppHandle) -> tauri::WebviewWindow {
@@ -77,110 +67,75 @@ struct SelectedTextPayload {
     text: String,
     #[serde(rename = "usedFallback")]
     used_fallback: bool,
+    #[serde(rename = "captureMethod")]
+    capture_method: String,
+    /// true רק כש-UI Automation נכשל/לא זמין **וגם** ה-fallback ללוח כבוי —
+    /// כדי שה-popup יוכל להציג הודעה ספציפית שמכוונת להגדרות.
+    #[serde(rename = "captureFailedNoFallback")]
+    capture_failed_no_fallback: bool,
 }
 
-/// מציגה את חלון הפופאפ ושולחת אליו אירוע עם הטקסט שיתורגם.
-/// נקראת **רק אחרי** שלכידת הטקסט המסומן הסתיימה — לעולם לא לפני שליחת Ctrl+C,
-/// כדי שהפופאפ לא יגנוב פוקוס מהאפליקציה שבה המשתמש סימן טקסט.
-fn show_popup_with_text(app: &AppHandle, text: String, used_fallback: bool) {
+/// מציגה את חלון הפופאפ ושולחת אליו אירוע עם תוצאת הלכידה.
+/// נקראת **רק אחרי** שהלכידה הסתיימה — לעולם לא לפני, כדי שהפופאפ לא יגנוב
+/// פוקוס מהאפליקציה שבה המשתמש סימן טקסט.
+fn show_popup_with_result(app: &AppHandle, payload: SelectedTextPayload) {
     let window = ensure_popup_window(app);
     let _ = window.center();
     let _ = window.show();
     let _ = window.set_focus();
-    let _ = window.emit("selected-text", SelectedTextPayload { text, used_fallback });
+    let _ = window.emit("selected-text", payload);
 }
 
-/// שולחת Ctrl+C "נקי" לאפליקציה הפעילה (הפוקוס לא משתנה — לא מציגים שום חלון לפני זה).
-/// משחררת קודם Shift/Alt שעלולים להיות עדיין "לחוצים" פיזית מקיצור המקשים הגלובלי
-/// (Ctrl+Shift+T), כדי שהעותק הסינתטי לא ייצא בטעות Ctrl+Shift+C.
-fn send_clean_copy_keystroke() {
-    if let Ok(mut enigo) = Enigo::new(&EnigoSettings::default()) {
-        let _ = enigo.key(Key::Shift, Direction::Release);
-        let _ = enigo.key(Key::Alt, Direction::Release);
-        thread::sleep(Duration::from_millis(20));
-        let _ = enigo.key(Key::Control, Direction::Press);
-        thread::sleep(Duration::from_millis(15));
-        let _ = enigo.key(Key::Unicode('c'), Direction::Click);
-        thread::sleep(Duration::from_millis(15));
-        let _ = enigo.key(Key::Control, Direction::Release);
-        #[cfg(debug_assertions)]
-        eprintln!("copy command sent: yes");
-    } else {
-        #[cfg(debug_assertions)]
-        eprintln!("copy command sent: no (enigo init failed)");
-    }
-}
-
-/// לוכדת את הטקסט המסומן באפליקציה הפעילה — **רק** אם הלוח השתנה בפועל מאז
-/// תחילת הקריאה. לעולם לא מוחקת/מאפסת/מחליפה את הלוח; רק קוראת ממנו.
-/// מחזירה (הטקסט שנמצא, האם זה fallback מהלוח הישן).
-fn capture_selected_text_via_shortcut(app: &AppHandle, allow_unchanged_fallback: bool) -> (Option<String>, bool) {
-    #[cfg(debug_assertions)]
-    let start = Instant::now();
-    let old_text = app.clipboard().read_text().unwrap_or_default();
-
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("foreground window captured: {}", if has_foreground_window() { "yes" } else { "no" });
-        eprintln!("old clipboard length: {}", old_text.chars().count());
-    }
-
-    // לא מציגים/מפוקסים שום חלון של QuickTranslate כאן — רק אחרי שהלכידה מסתיימת.
-    thread::sleep(Duration::from_millis(PRE_COPY_DELAY_MS));
-    send_clean_copy_keystroke();
-
-    let mut elapsed_ms: u64 = 0;
-    while elapsed_ms < CLIPBOARD_POLL_MAX_MS {
-        thread::sleep(Duration::from_millis(CLIPBOARD_POLL_INTERVAL_MS));
-        elapsed_ms += CLIPBOARD_POLL_INTERVAL_MS;
-
-        let current = app.clipboard().read_text().unwrap_or_default();
-        if !current.is_empty() && current != old_text {
-            #[cfg(debug_assertions)]
-            {
-                eprintln!("clipboard changed: yes");
-                eprintln!("new clipboard length: {}", current.chars().count());
-                eprintln!("fallback used: no");
-                eprintln!("capture duration ms: {}", start.elapsed().as_millis());
-            }
-            return (Some(current), false);
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    eprintln!("clipboard changed: no");
-
-    if allow_unchanged_fallback && !old_text.is_empty() {
-        #[cfg(debug_assertions)]
-        {
-            eprintln!("fallback used: yes");
-            eprintln!("capture duration ms: {}", start.elapsed().as_millis());
-        }
-        return (Some(old_text), true);
-    }
-
-    #[cfg(debug_assertions)]
-    {
-        eprintln!("fallback used: no");
-        eprintln!("capture duration ms: {}", start.elapsed().as_millis());
-    }
-    (None, false)
-}
-
-/// קיצור המקשים הגלובלי (Ctrl+Shift+T): מנסה ללכוד טקסט מסומן בפועל. אם הלוח
-/// לא השתנה ו-`allowUnchangedClipboardFallback` מופעל — מתרגם את תוכן הלוח
-/// הקיים. אחרת מציג שגיאה ברורה בעברית. הפופאפ מוצג רק בסוף, אחרי הלכידה.
+/// קיצור המקשים הגלובלי (Ctrl+Shift+T): מנסה SelectedTextCaptureEngine —
+/// קודם UI Automation (בלי לוח), ורק אם הוגדר ע"י המשתמש — fallback ללוח.
+/// לעולם לא מתרגם תוכן לוח ישן בשקט; הפופאפ מוצג רק בסוף הלכידה.
 fn translate_selected_text_via_shortcut(app: &AppHandle) {
-    let allow_fallback = allow_unchanged_clipboard_fallback(app);
-    let (captured, used_fallback) = capture_selected_text_via_shortcut(app, allow_fallback);
-    show_popup_with_text(app, captured.unwrap_or_default(), used_fallback);
+    let options = CaptureOptions {
+        try_without_clipboard: capture_selected_text_without_clipboard(app),
+        allow_clipboard_fallback: allow_clipboard_fallback_for_selected_text(app),
+        allow_unchanged_clipboard_fallback: allow_unchanged_clipboard_fallback(app),
+    };
+    let allow_clipboard_fallback = options.allow_clipboard_fallback;
+    let result = capture_selected_text(app, options);
+
+    #[cfg(debug_assertions)]
+    {
+        eprintln!("capture method attempted: {}", result.method.as_str());
+        eprintln!("capture success: {}", result.success);
+        if let Some(reason) = &result.reason {
+            eprintln!("capture reason: {reason}");
+        }
+        eprintln!("capture duration ms: {}", result.duration_ms);
+    }
+
+    let used_fallback = result.method == CaptureMethod::ClipboardFallback
+        && result.reason.as_deref() == Some("unchanged_clipboard_fallback");
+    let capture_failed_no_fallback = !result.success && !allow_clipboard_fallback;
+
+    show_popup_with_result(
+        app,
+        SelectedTextPayload {
+            text: result.text.unwrap_or_default(),
+            used_fallback,
+            capture_method: result.method.as_str().to_string(),
+            capture_failed_no_fallback,
+        },
+    );
 }
 
 /// "תרגם טקסט מהלוח" (תפריט מגש) — זרימה נפרדת ומכוונת: מתרגמת את תוכן הלוח
 /// הנוכחי בלי שום השוואה, כי כאן הכוונה המפורשת היא לתרגם מה שכבר בלוח.
 fn translate_current_clipboard(app: &AppHandle) {
-    let text = app.clipboard().read_text().unwrap_or_default();
-    show_popup_with_text(app, text, false);
+    let text = clipboard_fallback::read_current_clipboard(app);
+    show_popup_with_result(
+        app,
+        SelectedTextPayload {
+            text,
+            used_fallback: false,
+            capture_method: "clipboard_fallback".to_string(),
+            capture_failed_no_fallback: false,
+        },
+    );
 }
 
 #[tauri::command]
@@ -230,7 +185,7 @@ pub fn run() {
                         if event.state() == ShortcutState::Pressed {
                             let handle_for_thread = handler_handle.clone();
                             // לרוץ על thread נפרד כדי לא לחסום את ה-event loop של global-hotkey
-                            // בזמן ה-sleep/polling (עד ~1.5 שניות במקרה הגרוע).
+                            // בזמן הלכידה (UI Automation + אתחול COM, ואולי גם פולינג על הלוח).
                             thread::spawn(move || {
                                 translate_selected_text_via_shortcut(&handle_for_thread);
                             });

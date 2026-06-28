@@ -235,20 +235,60 @@ function SettingsView({ settings, onUpdateSettings, onBack }: SettingsViewProps)
           />
           <label htmlFor="auto-copy">העתק אוטומטית את התרגום ללוח</label>
         </div>
+      </section>
+
+      <section className="card">
+        <h2 className="card__title">לכידת טקסט מסומן</h2>
+        <p className="field__hint">
+          ב-Windows לא כל אפליקציה מאפשרת לקרוא טקסט מסומן ישירות. במקומות שלא תומכים
+          בזה, אפשר להפעיל fallback ללוח ההעתקה.
+        </p>
 
         <div className="checkbox-row">
           <input
-            id="allow-unchanged-clipboard"
+            id="capture-without-clipboard"
             type="checkbox"
-            checked={settings.allowUnchangedClipboardFallback}
-            onChange={(e) => onUpdateSettings({ allowUnchangedClipboardFallback: e.target.checked })}
+            checked={settings.captureSelectedTextWithoutClipboard}
+            onChange={(e) => onUpdateSettings({ captureSelectedTextWithoutClipboard: e.target.checked })}
           />
-          <label htmlFor="allow-unchanged-clipboard">תרגם גם אם הלוח לא השתנה</label>
+          <label htmlFor="capture-without-clipboard">נסה לקרוא טקסט מסומן בלי להשתמש בלוח</label>
         </div>
         <span className="field__hint">
-          אם קיצור המקשים לא הצליח לזהות שינוי בלוח, התוכנה תתרגם את הטקסט שכבר נמצא
-          בלוח. שימושי למי שמעתיק טקסט לפני התרגום.
+          התוכנה תנסה לקרוא את הטקסט המסומן ישירות מהאפליקציה הפעילה, בלי לשנות את לוח
+          ההעתקה.
         </span>
+
+        <div className="checkbox-row checkbox-row--spaced">
+          <input
+            id="allow-clipboard-fallback"
+            type="checkbox"
+            checked={settings.allowClipboardFallbackForSelectedText}
+            onChange={(e) => onUpdateSettings({ allowClipboardFallbackForSelectedText: e.target.checked })}
+          />
+          <label htmlFor="allow-clipboard-fallback">אם לא הצליח — השתמש בלוח ההעתקה</label>
+        </div>
+        <span className="field__hint">
+          כאשר קריאה ישירה של הטקסט המסומן נכשלת, התוכנה תוכל להשתמש בשיטת Ctrl+C. זה
+          יכול לשנות את הלוח ולכן כבוי כברירת מחדל.
+        </span>
+
+        {settings.allowClipboardFallbackForSelectedText && (
+          <div className="nested-option">
+            <div className="checkbox-row">
+              <input
+                id="allow-unchanged-clipboard"
+                type="checkbox"
+                checked={settings.allowUnchangedClipboardFallback}
+                onChange={(e) => onUpdateSettings({ allowUnchangedClipboardFallback: e.target.checked })}
+              />
+              <label htmlFor="allow-unchanged-clipboard">תרגם גם אם הלוח לא השתנה</label>
+            </div>
+            <span className="field__hint">
+              אם קיצור המקשים לא הצליח לזהות שינוי בלוח, התוכנה תתרגם את הטקסט שכבר נמצא
+              בלוח. שימושי למי שמעתיק טקסט לפני התרגום.
+            </span>
+          </div>
+        )}
       </section>
 
       <section className="privacy-note">
