@@ -138,12 +138,13 @@ fn translate_current_clipboard(app: &AppHandle) {
     );
 }
 
-/// פותחת את חלון הראשי ומציגה את מסך התרגום (ללא ניווט להגדרות).
+/// פותחת את חלון הראשי ומנווטת תמיד למסך התרגום — גם אם החלון היה על הגדרות.
 #[tauri::command]
 fn show_main_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_LABEL) {
         let _ = window.show();
         let _ = window.set_focus();
+        let _ = window.emit("navigate-translator", ());
     }
 }
 

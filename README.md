@@ -1,82 +1,67 @@
-# QuickTranslate Desktop
+# QuickTranslate — תרגום מהיר מכל מקום במחשב
 
-אפליקציית שולחן עבודה קלה לתרגום טקסט — עברית-first, RTL-first. בנויה עם
-**Tauri v2 + React + TypeScript + Vite** (לא Electron).
+![QuickTranslate Logo](assets/brand/quicktranslate-logo.png)
 
-מתרגמת טקסט שמוקלד/מודבק ישירות באפליקציה, וגם טקסט מסומן בכל מקום במחשב
-(קיצור מקשים גלובלי, ברירת מחדל `Ctrl+Shift+T`), עם אייקון ב-System Tray.
+אפליקציית Desktop קלה לתרגום טקסט — **עברית-first, RTL-first**.
+בנויה על **Tauri v2 + React + TypeScript** (לא Electron).
 
-לפרטי ארכיטקטורה, MVP, וכללי עבודה מלאים — ראו [CLAUDE.md](./CLAUDE.md) ואת
-התיקייה [docs/](./docs/).
+**אתר:** https://4pdara.github.io/QuickTranslate/
+**גרסאות:** https://github.com/4pdara/QuickTranslate/releases
+**מאגר:** https://github.com/4pdara/QuickTranslate
 
-מאגר הקוד: https://github.com/4pdara/QuickTranslate
+---
 
-**למשתמשי קצה:** אין צורך לשכפל את המאגר הזה. יש להוריד ולהריץ קובץ
-ה-installer (ראו "בנייה להפצה" למטה) — לא את תיקיית הפרויקט המלאה.
+## הורדה
+
+| קובץ | תיאור |
+|---|---|
+| [QuickTranslate_0.1.0_x64-setup.exe](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.0/QuickTranslate_0.1.0_x64-setup.exe) | Windows Installer (מומלץ) |
+| [QuickTranslate_0.1.0_x64_en-US.msi](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.0/QuickTranslate_0.1.0_x64_en-US.msi) | MSI Installer |
+| [QuickTranslate_0.1.0_portable.zip](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.0/QuickTranslate_0.1.0_portable.zip) | גרסה ניידת (ללא התקנה) |
+
+> **למשתמשי קצה:** אין צורך ב-Rust, Node, npm, או כל כלי פיתוח. פשוט הורידו והריצו את ה-installer.
+> הגרסה הניידת (portable) רצה ישירות ללא התקנה — דורשת WebView2 שמובנה ב-Windows 11 ו-Windows 10 מעודכן.
+
+---
+
+## תכונות עיקריות
+
+- **תרגום טקסט מסומן** — סמנו טקסט בכל אפליקציה ולחצו `Ctrl+Shift+T`
+- **SelectedTextCaptureEngine** — קריאת טקסט ישירה דרך Windows UI Automation (ללא גישה ללוח)
+- **חלונית תרגום צפה** — פופאפ קטן שמופיע מיד, ללא החלפת חלון
+- **System Tray** — רצה ברקע, זמינה בכל עת
+- **תפריט מגש:** פתח מתרגם / פתח הגדרות / תרגם טקסט מהלוח / יציאה
+- **ממשק עברי RTL** מלא
+- **ספקים חינמיים כברירת מחדל:** Google Translate ללא API (ניסיוני), LibreTranslate, Lingva
+- **ספקים מתקדמים:** Google Cloud Translation, DeepL (דורשים מפתח API)
+- **קל-משקל** — Tauri (Rust + WebView2), לא Electron
 
 ## ספקי תרגום
 
-האפליקציה לא נעולה לספק אחד. כיוון ברירת המחדל הוא **חינמי/קוד פתוח**:
+| ספק | קטגוריה | דורש מפתח |
+|---|---|---|
+| Google Translate ללא API | ניסיוני | לא |
+| LibreTranslate | חינמי/קוד פתוח | לא (אופציונלי) |
+| Lingva Translate | ניסיוני | לא |
+| Google Cloud Translation | מתקדם | כן (בתשלום) |
+| DeepL | מתקדם | כן |
+| Azure Translator | עתידי (stub) | — |
 
-| ספק | קטגוריה | דורש מפתח API | הערה |
-|---|---|---|---|
-| Google Translate — ללא API | ניסיוני | לא | endpoint לא רשמי, עלול להיחסם |
-| LibreTranslate | חינמי/קוד פתוח | לא (אופציונלי) | תומך בשרת מותאם/self-hosted |
-| Lingva Translate | ניסיוני | לא | מבוסס מופע ציבורי |
-| Google Cloud Translation | מתקדם/רשמי | כן (בתשלום) | API רשמי ויציב |
-| DeepL | מתקדם | כן | יש שכבה חינמית מוגבלת |
-| Azure Translator | עתידי (stub) | כן | עדיין לא מומש |
+> ⚠️ **Google Translate ללא API** הוא endpoint ציבורי לא-רשמי ועלול להיחסם או להשתנות בכל עת.
+> לשימוש יציב, מומלץ להגדיר ספק עם מפתח API.
 
-ניתן לבחור ולהגדיר ספק במסך ההגדרות (כפתור גלגל השיניים בראש המסך).
+---
 
-> ⚠️ ספק "Google Translate — ללא API" הוא ניסיוני: הוא קורא ל-endpoint
-> ציבורי לא-רשמי של Google ועלול להיחסם או להפסיק לעבוד בכל עת. ספק
-> Google Cloud Translation **הרשמי** (דורש מפתח API בתשלום) נשאר זמין
-> כאופציה יציבה ב"ספקים מתקדמים".
+## הרצה לפיתוח (Desktop App)
 
-## קיצור מקשים גלובלי (Ctrl+Shift+T) — SelectedTextCaptureEngine
-
-לחיצה על הקיצור מנסה **קודם** לקרוא את הטקסט המסומן ישירות מהאפליקציה
-הפעילה באמצעות Windows UI Automation — **בלי לגעת בלוח בכלל**. זה עובד ברוב
-האפליקציות הסטנדרטיות (Notepad, דפדפנים, תיבות טקסט). רק אם זה נכשל, ורק אם
-הפעלתם במפורש "אם לא הצליח — השתמש בלוח ההעתקה" בהגדרות, האפליקציה עוברת
-ל-fallback שמדמה Ctrl+C ובודק אם תוכן הלוח השתנה.
-
-**הלוח שלכם לעולם לא נמחק, מתאפס, או מוחלף** — בשום שלב, בשום שיטה. אם
-האפליקציה לא הצליחה לקרוא טקסט מסומן (גם לא דרך ה-fallback, אם הוא מופעל),
-מוצגת שגיאה ברורה בעברית במקום לתרגם תוכן ישן מהלוח בטעות.
-
-"תרגם טקסט מהלוח" בתפריט המגש הוא פעולה **נפרדת ומכוונת** — היא מתרגמת את
-תוכן הלוח הנוכחי בלי שום בדיקה, כי זו הכוונה המפורשת שלה.
-
-**מגבלה ידועה:** UI Automation לא נתמך בכל אפליקציה (למשל אפליקציות עם
-רינדור מותאם/canvas). במקרים האלה, אם ה-fallback ללוח כבוי, תוצג שגיאה
-ברורה במקום ניסיון שקט שעלול להיכשל.
-
-## הרצה לפיתוח
-
-דרישות: [Rust](https://www.rust-lang.org/) + [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (C++ workload) + Node.js.
+**דרישות:** [Rust](https://www.rust-lang.org/) + [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (C++ workload) + Node.js 20+
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-בהרצת `tauri dev` נפתח גם חלון טרמינל/קונסולה — זה תקין וצפוי בפיתוח (כדי
-לראות לוגים), ולא קיים בגרסת ההפצה הסופית.
-
-### web preview (UI בלבד, בדפדפן)
-
-ניתן לפתוח את ה-UI גם ישירות בדפדפן בלי Rust/Tauri:
-
-```bash
-npm run dev
-# פותח http://localhost:1420
-```
-
-בדפדפן מוצג באנר "מצב תצוגת אתר". **מה עובד:** עיצוב, ניווט בין מסכים, מסך הגדרות,
-שינוי הגדרות (נשמרות ב-localStorage). **מה לא עובד:** תרגום (נחסם CORS — `plugin-http`
-דורש Tauri runtime), קיצור מקשים גלובלי, תפריט מגש, לכידת טקסט מסומן.
+בהרצת `tauri dev` נפתח חלון קונסולה — תקין ב-dev, לא מופיע בגרסת ההפצה.
 
 ## בנייה להפצה
 
@@ -84,22 +69,48 @@ npm run dev
 npm run tauri build
 ```
 
-מייצר installer (NSIS `.exe`) תחת:
-`src-tauri/target/release/bundle/nsis/`
+מייצר:
+- `src-tauri/target/release/bundle/nsis/QuickTranslate_0.1.0_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/QuickTranslate_0.1.0_x64_en-US.msi`
+- `src-tauri/target/release/tauri-app.exe` ← גרסה ניידת (rename ל-QuickTranslate.exe)
 
-את ה-installer הזה בלבד יש לתת למשתמשי קצה — הם **לא** צריכים את Rust, Node,
-npm, Visual Studio Build Tools, או את תיקיית הפרויקט. ה-installer מטפל
-ב-WebView2 Runtime אם הוא חסר במערכת.
+## אתר הנחיתה
+
+```bash
+cd site
+npm install
+npm run dev      # תצוגה מקומית → http://localhost:5173/QuickTranslate/
+npm run build    # בנייה לייצור → site/dist/
+npm run preview  # תצוגה מקדימה של ה-build
+```
+
+GitHub Pages מופעל אוטומטית ב-push ל-main (`.github/workflows/deploy-pages.yml`).
+**כתובת האתר:** https://4pdara.github.io/QuickTranslate/
+
+## web preview מקומי (UI בלבד, בלי Tauri)
+
+```bash
+npm run dev
+# → http://localhost:1420
+```
+
+בדפדפן מוצג באנר "מצב תצוגת אתר". תרגום לא יעבוד (CORS) — ה-UI בלבד.
 
 ## בדיקות
 
 ```bash
-npx tsc --noEmit       # בדיקת טיפוסים
-npm run build          # build של ה-frontend
-cd src-tauri && cargo check   # בדיקת קומפילציית Rust
+npx tsc --noEmit          # TypeScript
+npm run build             # Frontend build
+cd src-tauri && cargo check  # Rust
 ```
 
-## פרטיות
+## פרטיות ואבטחה
 
-טקסט שמתורגם נשלח רק לספק התרגום שנבחר (כולל כתובת שרת מותאמת שהוזנה
-במסך ההגדרות). מפתחות API נשמרים מקומית בלבד ולא נרשמים ביומן (log).
+- ללא חשבון משתמש, ללא backend בענן, ללא טלמטריה.
+- מפתחות API נשמרים מקומית ב-`%APPDATA%/com.quicktranslate.desktop/`.
+- הטקסט נשלח רק לספק התרגום שנבחר.
+- לוח ההעתקה של המשתמש **לא נמחק ולא מוחלף** בשום שלב.
+
+## לפרטי ארכיטקטורה
+
+ראו [CLAUDE.md](./CLAUDE.md) ואת תיקיית [docs/](./docs/).

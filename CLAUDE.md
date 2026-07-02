@@ -351,6 +351,15 @@ CLAUDE.md                  # קובץ זה
 - [x] web preview mode: `src/lib/isTauri.ts`, localStorage fallback בהגדרות,
       באנר "מצב תצוגת אתר" בדפדפן, כפתור מזעור מוסתר בדפדפן. UI עובד בדפדפן;
       תרגום נחסם CORS כי `plugin-http` דורש Tauri runtime.
+- [x] **תיקון באג ניווט מגש:** `show_main_window` עכשיו שולח `navigate-translator`.
+      "פתח מתרגם" תמיד מנווט למסך התרגום. "פתח הגדרות" תמיד למסך הגדרות.
+      `App.tsx` מאזין גם ל-`navigate-translator` וגם ל-`navigate-settings`.
+- [x] **אייקוני Brand:** כל קבצי `src-tauri/icons/` נוצרו מ-`assets/brand/quicktranslate-app-icon.png`
+      (1254×1254 px) בעזרת `npm run tauri -- icon`. כולל `.ico`, `.icns`, `32x32`, `128x128` ועוד.
+- [x] **אתר נחיתה Hebrew:** `site/` — Vite + React + TS. קישורי הורדה ל-GitHub Releases.
+      GitHub Pages workflow: `.github/workflows/deploy-pages.yml`.
+      כתובת: `https://4pdara.github.io/QuickTranslate/`
+- [x] `RELEASE_NOTES_v0.1.0.md` — רשימת שינויים לגרסה 0.1.0.
 - [ ] בדיקה ידנית מלאה עם מפתח API/שרת אמיתי לכל ספק
 - [ ] בדיקה ידנית של הקיצור מול דפדפן/Notepad בפועל (זמין רק למשתמש, לא לסוכן —
       ראו 5 תרחישי בדיקה מדויקים ב-`docs/NEXT_ACTIONS.md`)

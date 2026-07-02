@@ -37,3 +37,11 @@ src-tauri/target/**
 *.msi
 *setup.exe
 src-tauri/target/release/bundle/
+
+# אתר נחיתה — build artifacts ותלויות
+site/node_modules/
+site/dist/
+site/public/brand/
+# אייקוני iOS/Android — נוצרים ע"י tauri icon command
+src-tauri/icons/ios/
+src-tauri/icons/android/

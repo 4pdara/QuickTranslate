@@ -38,9 +38,11 @@ function App() {
 
   useEffect(() => {
     if (!isTauri()) return;
-    const unlistenPromise = listen("navigate-settings", () => setView("settings"));
+    const unlistenSettings = listen("navigate-settings", () => setView("settings"));
+    const unlistenTranslator = listen("navigate-translator", () => setView("translate"));
     return () => {
-      void unlistenPromise.then((unlisten) => unlisten());
+      void unlistenSettings.then((u) => u());
+      void unlistenTranslator.then((u) => u());
     };
   }, []);
 

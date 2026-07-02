@@ -76,6 +76,21 @@ Notepad, רוב תיבות הטקסט הסטנדרטיות של Windows, WPF, ו
 2. אחרי הרצת הקיצור, פתח שוב את Win+V ווודא שההיסטוריה לא נמחקה/השתנתה
    באופן בלתי-צפוי (כשה-UI Automation מצליח, הלוח לא אמור להיגע בכלל).
 
+## שינויים במילסטון M12 (2026-07-02)
+
+**תיקון באג ניווט מגש:** `show_main_window` מוסיף emit ל-`navigate-translator`.
+"פתח מתרגם" עכשיו תמיד מנווט למסך התרגום, ללא תלות במסך האחרון.
+
+**Brand Icons:** כל `src-tauri/icons/` נוצרו מ-`assets/brand/quicktranslate-app-icon.png`
+(1254×1254) בעזרת Tauri CLI. כולל `.ico`, `.icns`, Windows Appx squares.
+
+**אתר נחיתה:** `site/` — Vite + React + TS + Hebrew RTL. 9 סקשנים.
+GitHub Pages workflow: `.github/workflows/deploy-pages.yml`.
+
+**GitHub Release v0.1.0:** NSIS setup.exe + MSI + portable ZIP.
+
+---
+
 ## שינויים במילסטון M11 (2026-07-02)
 
 - **תפריט מגש משופר:** נוסף "פתח מתרגם" בראש התפריט (פותח חלון ראשי ומסך
