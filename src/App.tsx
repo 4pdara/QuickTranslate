@@ -5,6 +5,7 @@ import "./App.css";
 import { DEFAULT_SETTINGS, type AppSettings } from "./lib/settings/types";
 import { loadSettings, saveSettings } from "./lib/settings/store";
 import { getProvider, isProviderConfigured } from "./lib/translation/registry";
+import { isTauri } from "./lib/isTauri";
 import TranslatorView from "./TranslatorView";
 import SettingsView from "./SettingsView";
 
@@ -36,6 +37,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!isTauri()) return;
     const unlistenPromise = listen("navigate-settings", () => setView("settings"));
     return () => {
       void unlistenPromise.then((unlisten) => unlisten());
@@ -49,6 +51,7 @@ function App() {
   }
 
   async function handleMinimize() {
+    if (!isTauri()) return;
     await getCurrentWindow().hide();
   }
 
@@ -62,6 +65,11 @@ function App() {
 
   return (
     <main className="app">
+      {!isTauri() && (
+        <div className="web-preview-banner">
+          מצב תצוגת אתר — קיצורי מקשים ושורת משימות זמינים רק באפליקציית Desktop.
+        </div>
+      )}
       {view === "translate" ? (
         <>
           <header className="app__header">
@@ -72,14 +80,16 @@ function App() {
             </div>
             <div className="app__header-actions">
               <ProviderStatusBadge settings={settings} />
-              <button
-                type="button"
-                className="icon-button"
-                title="מזער למגש המערכת"
-                onClick={() => void handleMinimize()}
-              >
-                ─
-              </button>
+              {isTauri() && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  title="מזער למגש המערכת"
+                  onClick={() => void handleMinimize()}
+                >
+                  ─
+                </button>
+              )}
               <button type="button" className="icon-button" title="הגדרות" onClick={() => setView("settings")}>
                 ⚙
               </button>

@@ -15,10 +15,10 @@
         "label": "main",
         "title": "QuickTranslate — תרגום מהיר",
         "url": "index.html",
-        "width": 760,
-        "height": 620,
+        "width": 720,
+        "height": 520,
         "minWidth": 600,
-        "minHeight": 460,
+        "minHeight": 440,
         "center": true,
         "visible": true
       }

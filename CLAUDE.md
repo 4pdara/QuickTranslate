@@ -291,7 +291,8 @@ src/
       google.ts
       deepl.ts
       azure.ts
-  lib/settings/               # מודל הגדרות וגישה אליהן (tauri-plugin-store)
+  lib/settings/               # מודל הגדרות וגישה אליהן (tauri-plugin-store / localStorage)
+  lib/isTauri.ts               # זיהוי Tauri vs. browser (web preview)
   lib/scriptDetect.ts          # זיהוי כיוון עברית/אנגלית אוטומטי
 src-tauri/
   src/lib.rs                   # tray, קיצור מקשים, חלונות, אירועים, הגדרות
@@ -343,6 +344,13 @@ CLAUDE.md                  # קובץ זה
 - [x] הודעת שגיאה ספציפית כש-UI Automation נכשל וה-fallback כבוי: "לא הצלחתי
       לקרוא את הטקסט המסומן באפליקציה הזו. אפשר להפעיל fallback ללוח בהגדרות."
 - [x] `cargo check`/`cargo check --release` נקיים מאזהרות; `npm run tauri build` עובר
+- [x] תפריט מגש: "פתח מתרגם" (ראש התפריט) + `show_main_window` command. סדר:
+      פתח מתרגם → פתח הגדרות → תרגם טקסט מהלוח → יציאה.
+- [x] חלון קומפקטי: ברירת מחדל 720×520, minHeight 440; CSS מוכווץ (panel
+      min-height 160px, padding/gap מוקטנים, הוסר min-height: 100vh).
+- [x] web preview mode: `src/lib/isTauri.ts`, localStorage fallback בהגדרות,
+      באנר "מצב תצוגת אתר" בדפדפן, כפתור מזעור מוסתר בדפדפן. UI עובד בדפדפן;
+      תרגום נחסם CORS כי `plugin-http` דורש Tauri runtime.
 - [ ] בדיקה ידנית מלאה עם מפתח API/שרת אמיתי לכל ספק
 - [ ] בדיקה ידנית של הקיצור מול דפדפן/Notepad בפועל (זמין רק למשתמש, לא לסוכן —
       ראו 5 תרחישי בדיקה מדויקים ב-`docs/NEXT_ACTIONS.md`)

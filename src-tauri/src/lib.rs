@@ -138,6 +138,16 @@ fn translate_current_clipboard(app: &AppHandle) {
     );
 }
 
+/// פותחת את חלון הראשי ומציגה את מסך התרגום (ללא ניווט להגדרות).
+#[tauri::command]
+fn show_main_window(app: AppHandle) {
+    if let Some(window) = app.get_webview_window(MAIN_LABEL) {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// פותחת את חלון הראשי ומנווטת למסך ההגדרות.
 #[tauri::command]
 fn show_settings_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_LABEL) {
@@ -155,21 +165,23 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![show_settings_window])
+        .invoke_handler(tauri::generate_handler![show_main_window, show_settings_window])
         .setup(|app| {
             let handle = app.handle().clone();
 
+            let open_app = MenuItem::with_id(app, "open_app", "פתח מתרגם", true, None::<&str>)?;
             let open_settings = MenuItem::with_id(app, "open_settings", "פתח הגדרות", true, None::<&str>)?;
             let translate_clipboard =
                 MenuItem::with_id(app, "translate_clipboard", "תרגם טקסט מהלוח", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "יציאה", true, None::<&str>)?;
-            let tray_menu = Menu::with_items(app, &[&open_settings, &translate_clipboard, &quit])?;
+            let tray_menu = Menu::with_items(app, &[&open_app, &open_settings, &translate_clipboard, &quit])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&tray_menu)
                 .tooltip("QuickTranslate")
                 .on_menu_event(|app, event| match event.id().as_ref() {
+                    "open_app" => show_main_window(app.clone()),
                     "open_settings" => show_settings_window(app.clone()),
                     "translate_clipboard" => translate_current_clipboard(app),
                     "quit" => app.exit(0),
