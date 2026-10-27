@@ -141,6 +141,50 @@ fn translate_current_clipboard(app: &AppHandle) {
     );
 }
 
+#[cfg(windows)]
+mod win_focus {
+    #[link(name = "user32")]
+    extern "system" {
+        pub fn GetForegroundWindow() -> isize;
+        pub fn GetWindowThreadProcessId(hWnd: isize, lpdwProcessId: *mut u32) -> u32;
+        pub fn SetForegroundWindow(hWnd: isize) -> i32;
+        pub fn ShowWindow(hWnd: isize, nCmdShow: i32) -> i32;
+        pub fn BringWindowToTop(hWnd: isize) -> i32;
+        pub fn AttachThreadInput(idAttach: u32, idAttachTo: u32, fAttach: i32) -> i32;
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        pub fn GetCurrentThreadId() -> u32;
+    }
+
+    pub fn bring_to_foreground(hwnd: isize) {
+        unsafe {
+            const SW_RESTORE: i32 = 9;
+            const SW_SHOW: i32 = 5;
+            ShowWindow(hwnd, SW_RESTORE);
+            ShowWindow(hwnd, SW_SHOW);
+            BringWindowToTop(hwnd);
+
+            let fg = GetForegroundWindow();
+            let cur_thread = GetCurrentThreadId();
+            let fg_thread = if fg != 0 {
+                GetWindowThreadProcessId(fg, std::ptr::null_mut())
+            } else {
+                0
+            };
+
+            if fg_thread != 0 && fg_thread != cur_thread {
+                AttachThreadInput(cur_thread, fg_thread, 1);
+                SetForegroundWindow(hwnd);
+                BringWindowToTop(hwnd);
+                AttachThreadInput(cur_thread, fg_thread, 0);
+            } else {
+                SetForegroundWindow(hwnd);
+            }
+        }
+    }
+}
+
 /// פותחת את חלון הראשי ומנווטת תמיד למסך התרגום — גם אם החלון היה על הגדרות.
 #[tauri::command]
 fn show_main_window(app: AppHandle) {
@@ -149,15 +193,8 @@ fn show_main_window(app: AppHandle) {
         let _ = window.unminimize();
         #[cfg(windows)]
         {
-            use windows::Win32::Foundation::HWND;
-            use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW};
             if let Ok(hwnd) = window.hwnd() {
-                unsafe {
-                    let win32_hwnd = HWND(hwnd.0);
-                    let _ = ShowWindow(win32_hwnd, SW_RESTORE);
-                    let _ = ShowWindow(win32_hwnd, SW_SHOW);
-                    let _ = SetForegroundWindow(win32_hwnd);
-                }
+                win_focus::bring_to_foreground(hwnd.0 as isize);
             }
         }
         let _ = window.set_focus();
@@ -173,15 +210,8 @@ fn show_settings_window(app: AppHandle) {
         let _ = window.unminimize();
         #[cfg(windows)]
         {
-            use windows::Win32::Foundation::HWND;
-            use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW};
             if let Ok(hwnd) = window.hwnd() {
-                unsafe {
-                    let win32_hwnd = HWND(hwnd.0);
-                    let _ = ShowWindow(win32_hwnd, SW_RESTORE);
-                    let _ = ShowWindow(win32_hwnd, SW_SHOW);
-                    let _ = SetForegroundWindow(win32_hwnd);
-                }
+                win_focus::bring_to_foreground(hwnd.0 as isize);
             }
         }
         let _ = window.set_focus();
@@ -251,6 +281,15 @@ pub fn run() {
             if let Some(main_window) = handle.get_webview_window(MAIN_LABEL) {
                 let _ = main_window.set_size(Size::Logical(LogicalSize { width: 540.0, height: 405.0 }));
                 let _ = main_window.center();
+                let _ = main_window.show();
+                let _ = main_window.unminimize();
+                let _ = main_window.set_focus();
+                #[cfg(windows)]
+                {
+                    if let Ok(hwnd) = main_window.hwnd() {
+                        win_focus::bring_to_foreground(hwnd.0 as isize);
+                    }
+                }
             }
 
             Ok(())
