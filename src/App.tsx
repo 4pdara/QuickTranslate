@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
@@ -26,14 +27,25 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [ready, setReady] = useState(false);
   const [view, setView] = useState<View>("translate");
+  const [notice, setNotice] = useState<string | null>(null);
+  const settingsRef = useRef(settings);
 
   useEffect(() => {
     loadSettings()
       .then((loaded) => {
         setSettings(loaded);
+        settingsRef.current = loaded;
         setReady(true);
       })
-      .catch(() => setReady(true));
+      .catch(() => {
+        setNotice("לא ניתן לטעון את ההגדרות. בדוק הרשאות גישה ונסה להפעיל מחדש.");
+        setReady(true);
+      });
+    if (isTauri()) {
+      void invoke<{ error: string | null }>("get_shortcut_status").then((status) => {
+        if (status.error) setNotice(status.error);
+      }).catch(() => setNotice("לא ניתן לבדוק את קיצור המקשים."));
+    }
   }, []);
 
   useEffect(() => {
@@ -47,9 +59,20 @@ function App() {
   }, []);
 
   async function updateSettings(patch: Partial<AppSettings>) {
-    const next = { ...settings, ...patch };
+    const next = { ...settingsRef.current, ...patch };
+    settingsRef.current = next;
     setSettings(next);
-    await saveSettings(next);
+    try {
+      await saveSettings(next);
+    } catch {
+      setNotice("שמירת ההגדרות נכשלה. השינויים עלולים לא להישמר לאחר סגירת התוכנה.");
+    }
+  }
+
+  async function applyShortcut(shortcut: string) {
+    if (isTauri()) await invoke("set_global_shortcut", { shortcut });
+    setNotice(null);
+    await updateSettings({ globalShortcut: shortcut.trim() });
   }
 
   async function handleMinimize() {
@@ -72,8 +95,8 @@ function App() {
           מצב תצוגת אתר — קיצורי מקשים ושורת משימות זמינים רק באפליקציית Desktop.
         </div>
       )}
-      {view === "translate" ? (
-        <>
+      {notice && <div className="banner" role="alert">{notice}</div>}
+      <div hidden={view !== "translate"}>
           <header className="app__header">
             <div>
               <h1 className="app__title">
@@ -98,9 +121,9 @@ function App() {
             </div>
           </header>
           <TranslatorView settings={settings} onUpdateSettings={updateSettings} onOpenSettings={() => setView("settings")} />
-        </>
-      ) : (
-        <SettingsView settings={settings} onUpdateSettings={updateSettings} onBack={() => setView("translate")} />
+      </div>
+      {view === "settings" && (
+        <SettingsView settings={settings} onUpdateSettings={updateSettings} onApplyShortcut={applyShortcut} onBack={() => setView("translate")} />
       )}
     </main>
   );

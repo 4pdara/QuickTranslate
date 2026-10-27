@@ -9,6 +9,7 @@ interface SettingsViewProps {
   settings: AppSettings;
   onUpdateSettings: (patch: Partial<AppSettings>) => void;
   onBack: () => void;
+  onApplyShortcut: (shortcut: string) => Promise<void>;
 }
 
 type ConnectionStatus = "idle" | "testing" | "ok" | "error";
@@ -45,7 +46,7 @@ function ProviderCard({
   return (
     <div className={`provider-card ${selected ? "provider-card--selected" : ""}`}>
       <label className="provider-card__header">
-        <input type="radio" name="provider" checked={selected} onChange={onSelect} />
+        <input type="radio" name="provider" checked={selected} disabled={provider.id === "azure"} onChange={onSelect} />
         <span className="provider-card__label">{provider.label}</span>
         {provider.category === "experimental" && <span className="badge badge--experimental">ניסיוני</span>}
         {provider.category === "advanced" && <span className="badge badge--advanced">בתשלום</span>}
@@ -78,10 +79,10 @@ function ProviderCard({
             </div>
           )}
 
-          {provider.requiresApiKey && (
+          {(provider.requiresApiKey || provider.id === "libretranslate") && (
             <div className="field">
               <label className="field__label" htmlFor={`api-key-${provider.id}`}>
-                מפתח API
+                מפתח API{!provider.requiresApiKey ? " (אופציונלי)" : ""}
               </label>
               <div className="input-with-action">
                 <input
@@ -103,7 +104,7 @@ function ProviderCard({
           )}
 
           <div className="input-with-action">
-            <button type="button" className="secondary" onClick={() => void handleTest()}>
+            <button type="button" className="secondary" disabled={status === "testing"} onClick={() => void handleTest()}>
               בדוק חיבור
             </button>
             {status === "testing" && <span className="status-line">בודק…</span>}
@@ -116,8 +117,24 @@ function ProviderCard({
   );
 }
 
-function SettingsView({ settings, onUpdateSettings, onBack }: SettingsViewProps) {
+function SettingsView({ settings, onUpdateSettings, onApplyShortcut, onBack }: SettingsViewProps) {
   const [appVersion, setAppVersion] = useState("");
+  const [shortcutDraft, setShortcutDraft] = useState(settings.globalShortcut);
+  const [shortcutMessage, setShortcutMessage] = useState("");
+  const [applyingShortcut, setApplyingShortcut] = useState(false);
+
+  async function applyShortcut() {
+    setApplyingShortcut(true);
+    setShortcutMessage("");
+    try {
+      await onApplyShortcut(shortcutDraft);
+      setShortcutMessage("קיצור המקשים עודכן ופעיל כעת.");
+    } catch (error) {
+      setShortcutMessage(typeof error === "string" ? error : "לא ניתן להפעיל את קיצור המקשים.");
+    } finally {
+      setApplyingShortcut(false);
+    }
+  }
 
   useEffect(() => {
     getVersion()
@@ -220,10 +237,13 @@ function SettingsView({ settings, onUpdateSettings, onBack }: SettingsViewProps)
           <input
             id="shortcut-input"
             type="text"
-            value={settings.globalShortcut}
-            onChange={(e) => onUpdateSettings({ globalShortcut: e.target.value })}
+            dir="ltr"
+            value={shortcutDraft}
+            onChange={(e) => setShortcutDraft(e.target.value)}
           />
-          <span className="field__hint">לדוגמה: Ctrl+Shift+T. דורש הפעלה מחדש של האפליקציה כדי לחול.</span>
+          <button type="button" disabled={applyingShortcut} onClick={() => void applyShortcut()}>החל קיצור מקשים</button>
+          <span className="field__hint">לדוגמה: Ctrl+Shift+T. השינוי חל מיד. אם הקיצור תפוס, הקיצור הקודם נשאר פעיל.</span>
+          {shortcutMessage && <span role="status">{shortcutMessage}</span>}
         </div>
 
         <div className="checkbox-row">

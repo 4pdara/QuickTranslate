@@ -1,10 +1,10 @@
 const BASE = import.meta.env.BASE_URL;
 const GITHUB = "https://github.com/4pdara/QuickTranslate";
 const RELEASES = `${GITHUB}/releases`;
-const DL_BASE = `${GITHUB}/releases/download/v0.1.0`;
-const DL_SETUP = `${DL_BASE}/QuickTranslate_0.1.0_x64-setup.exe`;
-const DL_MSI = `${DL_BASE}/QuickTranslate_0.1.0_x64_en-US.msi`;
-const DL_PORTABLE = `${DL_BASE}/QuickTranslate_0.1.0_portable.zip`;
+const DL_BASE = `${GITHUB}/releases/download/v0.1.1`;
+const DL_SETUP = `${DL_BASE}/QuickTranslate_0.1.1_x64-setup.exe`;
+const DL_MSI = `${DL_BASE}/QuickTranslate_0.1.1_x64_en-US.msi`;
+const DL_PORTABLE = `${DL_BASE}/QuickTranslate_0.1.1_portable.zip`;
 const SHORTCUT = "Ctrl+Shift+T";
 
 function Nav() {

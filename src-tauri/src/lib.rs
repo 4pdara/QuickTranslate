@@ -1,19 +1,22 @@
 mod capture;
+mod shortcuts;
 
 use capture::selected_text::{capture_selected_text, CaptureOptions};
 use capture::{clipboard_fallback, CaptureMethod};
 use serde::Serialize;
 use std::thread;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 const POPUP_LABEL: &str = "popup";
 const MAIN_LABEL: &str = "main";
 const DEFAULT_SHORTCUT: &str = "Ctrl+Shift+T";
+static CAPTURE_BUSY: AtomicBool = AtomicBool::new(false);
 
 /// קוראת ערך בודד מתוך הגדרות האפליקציה (settings.json), אם קיים.
 fn read_setting<T>(app: &AppHandle, key: &str, parse: impl Fn(&serde_json::Value) -> Option<T>) -> Option<T> {
@@ -143,6 +146,20 @@ fn translate_current_clipboard(app: &AppHandle) {
 fn show_main_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_LABEL) {
         let _ = window.show();
+        let _ = window.unminimize();
+        #[cfg(windows)]
+        {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW};
+            if let Ok(hwnd) = window.hwnd() {
+                unsafe {
+                    let win32_hwnd = HWND(hwnd.0);
+                    let _ = ShowWindow(win32_hwnd, SW_RESTORE);
+                    let _ = ShowWindow(win32_hwnd, SW_SHOW);
+                    let _ = SetForegroundWindow(win32_hwnd);
+                }
+            }
+        }
         let _ = window.set_focus();
         let _ = window.emit("navigate-translator", ());
     }
@@ -153,6 +170,20 @@ fn show_main_window(app: AppHandle) {
 fn show_settings_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_LABEL) {
         let _ = window.show();
+        let _ = window.unminimize();
+        #[cfg(windows)]
+        {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::WindowsAndMessaging::{SetForegroundWindow, ShowWindow, SW_RESTORE, SW_SHOW};
+            if let Ok(hwnd) = window.hwnd() {
+                unsafe {
+                    let win32_hwnd = HWND(hwnd.0);
+                    let _ = ShowWindow(win32_hwnd, SW_RESTORE);
+                    let _ = ShowWindow(win32_hwnd, SW_SHOW);
+                    let _ = SetForegroundWindow(win32_hwnd);
+                }
+            }
+        }
         let _ = window.set_focus();
         let _ = window.emit("navigate-settings", ());
     }
@@ -161,12 +192,27 @@ fn show_settings_window(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            show_main_window(app.clone());
+        }))
+        .manage(shortcuts::ShortcutManager::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![show_main_window, show_settings_window])
+        .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(|app, _, event| {
+            if event.state() == ShortcutState::Pressed
+                && CAPTURE_BUSY.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok()
+            {
+                let app = app.clone();
+                thread::spawn(move || {
+                    translate_selected_text_via_shortcut(&app);
+                    CAPTURE_BUSY.store(false, Ordering::SeqCst);
+                });
+            }
+        }).build())
+        .invoke_handler(tauri::generate_handler![show_main_window, show_settings_window,
+            shortcuts::get_shortcut_status, shortcuts::set_global_shortcut])
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -181,6 +227,12 @@ pub fn run() {
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&tray_menu)
                 .tooltip("QuickTranslate")
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if matches!(event, TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. }) {
+                        show_main_window(tray.app_handle().clone());
+                    }
+                })
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "open_app" => show_main_window(app.clone()),
                     "open_settings" => show_settings_window(app.clone()),
@@ -191,20 +243,7 @@ pub fn run() {
                 .build(app)?;
 
             let shortcut_str = configured_shortcut(&handle);
-            if let Ok(shortcut) = shortcut_str.parse::<Shortcut>() {
-                let handler_handle = handle.clone();
-                app.global_shortcut()
-                    .on_shortcut(shortcut, move |_app, _shortcut, event| {
-                        if event.state() == ShortcutState::Pressed {
-                            let handle_for_thread = handler_handle.clone();
-                            // לרוץ על thread נפרד כדי לא לחסום את ה-event loop של global-hotkey
-                            // בזמן הלכידה (UI Automation + אתחול COM, ואולי גם פולינג על הלוח).
-                            thread::spawn(move || {
-                                translate_selected_text_via_shortcut(&handle_for_thread);
-                            });
-                        }
-                    })?;
-            }
+            shortcuts::initialize(&handle, &shortcut_str);
 
             // יצירה מוקדמת (מוסתרת) של חלון הפופאפ כדי שההפעלה הראשונה תהיה מהירה.
             ensure_popup_window(&handle);

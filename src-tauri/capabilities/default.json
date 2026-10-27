@@ -20,6 +20,7 @@
         { "url": "https://api-free.deepl.com/*" },
         { "url": "https://translation.googleapis.com/*" },
         { "url": "https://translate.googleapis.com/*" },
+        { "url": "https://translate.google.com/*" },
         { "url": "http://*/*" },
         { "url": "https://*/*" }
       ]

@@ -17,7 +17,7 @@ export async function translateWithSettings(
     throw new TranslationError("יש להגדיר את ספק התרגום בהגדרות (מפתח API ו/או כתובת שרת).", provider.id);
   }
 
-  const apiKey = settings.providerApiKeys[provider.id] ?? "";
+  const apiKey = settings.providerApiKeys[provider.id]?.trim() ?? "";
   const serverUrl = getEffectiveServerUrl(provider, settings);
 
   return provider.translate({ text, sourceLanguage, targetLanguage, apiKey, serverUrl });

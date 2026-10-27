@@ -22,12 +22,19 @@ export function getProvider(id: string): TranslationProvider | undefined {
 }
 
 export function getEffectiveServerUrl(provider: TranslationProvider, settings: AppSettings): string {
-  return settings.providerServerUrls[provider.id] || provider.defaultServerUrl || "";
+  return settings.providerServerUrls[provider.id]?.trim() || provider.defaultServerUrl || "";
 }
 
 /** האם לספק יש כל מה שהוא צריך כדי לתרגם בפועל (מפתח API ו/או כתובת שרת). */
 export function isProviderConfigured(provider: TranslationProvider, settings: AppSettings): boolean {
-  const hasApiKey = !provider.requiresApiKey || Boolean(settings.providerApiKeys[provider.id]);
-  const hasServerUrl = !provider.supportsServerUrl || getEffectiveServerUrl(provider, settings) !== "";
+  if (provider.id === "azure") return false;
+  const hasApiKey = !provider.requiresApiKey || Boolean(settings.providerApiKeys[provider.id]?.trim());
+  let hasServerUrl = !provider.supportsServerUrl;
+  if (provider.supportsServerUrl) {
+    try {
+      const url = new URL(getEffectiveServerUrl(provider, settings));
+      hasServerUrl = ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+    } catch { hasServerUrl = false; }
+  }
   return hasApiKey && hasServerUrl;
 }

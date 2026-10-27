@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
@@ -26,19 +26,24 @@ interface SelectedTextPayload {
 function PopupApp() {
   const [state, setState] = useState<PopupState>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
+  const requestId = useRef(0);
+  const [copyError, setCopyError] = useState("");
 
   useEffect(() => {
     const unlistenPromise = listen<SelectedTextPayload>("selected-text", (event) => {
       void runTranslation(event.payload.text, event.payload.usedFallback, event.payload.captureFailedNoFallback);
     });
     return () => {
+      requestId.current += 1;
       void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 
   async function runTranslation(rawText: string, usedFallback: boolean, noFallback: boolean) {
+    const currentRequest = ++requestId.current;
     const text = rawText.trim();
     setCopied(false);
+    setCopyError("");
 
     if (!text) {
       setState({ kind: "empty", noFallback });
@@ -49,18 +54,25 @@ function PopupApp() {
 
     try {
       const settings = await loadSettings();
+      if (currentRequest !== requestId.current) return;
       const effectiveTarget = settings.autoDetectDirection
         ? autoTargetLanguage(text, settings.targetLanguage)
         : settings.targetLanguage;
       const result = await translateWithSettings(settings, text, settings.sourceLanguage, effectiveTarget);
+      if (currentRequest !== requestId.current) return;
 
       setState({ kind: "success", text: result.translatedText, usedFallback });
 
       if (settings.autoCopyResult) {
-        await writeText(result.translatedText);
-        setCopied(true);
+        try {
+          await writeText(result.translatedText);
+          if (currentRequest === requestId.current) setCopied(true);
+        } catch {
+          if (currentRequest === requestId.current) setCopyError("התרגום הושלם, אך ההעתקה ללוח נכשלה.");
+        }
       }
     } catch (err) {
+      if (currentRequest !== requestId.current) return;
       const message = err instanceof TranslationError ? err.message : "אירעה שגיאה לא צפויה בתרגום. נסה שוב.";
       setState({ kind: "error", message });
     }
@@ -68,11 +80,16 @@ function PopupApp() {
 
   async function handleCopy() {
     if (state.kind !== "success") return;
-    await writeText(state.text);
-    setCopied(true);
+    try {
+      await writeText(state.text);
+      setCopied(true);
+      setCopyError("");
+    } catch { setCopyError("ההעתקה ללוח נכשלה. נסה שוב."); }
   }
 
   async function handleClose() {
+    requestId.current += 1;
+    setState({ kind: "idle" });
     await getCurrentWindow().hide();
   }
 
@@ -96,7 +113,7 @@ function PopupApp() {
         {state.kind === "error" && <p className="popup__error">{state.message}</p>}
         {state.kind === "success" && (
           <>
-            <p className="popup__result">{state.text}</p>
+            <p className="popup__result" dir="auto">{state.text}</p>
             {state.usedFallback && (
               <p className="popup__hint">הטקסט תורגם מהלוח כי הלוח לא השתנה.</p>
             )}
@@ -104,6 +121,8 @@ function PopupApp() {
           </>
         )}
       </div>
+
+      {copyError && <p role="status" className="popup__error">{copyError}</p>}
 
       <div className="popup__actions">
         {state.kind === "success" && (

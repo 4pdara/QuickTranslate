@@ -31,7 +31,16 @@ export async function loadSettings(): Promise<AppSettings> {
   return { ...DEFAULT_SETTINGS, ...saved };
 }
 
-export async function saveSettings(settings: AppSettings): Promise<void> {
+let saveQueue: Promise<void> = Promise.resolve();
+
+export function saveSettings(settings: AppSettings): Promise<void> {
+  const snapshot = structuredClone(settings);
+  const pending = saveQueue.catch(() => {}).then(() => persistSettings(snapshot));
+  saveQueue = pending;
+  return pending;
+}
+
+async function persistSettings(settings: AppSettings): Promise<void> {
   if (!isTauri()) {
     try {
       localStorage.setItem(WEB_STORAGE_KEY, JSON.stringify(settings));

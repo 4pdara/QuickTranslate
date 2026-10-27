@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import type { AppSettings } from "./lib/settings/types";
 import { getProvider, isProviderConfigured } from "./lib/translation/registry";
@@ -19,13 +19,26 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const requestId = useRef(0);
+  const [copyError, setCopyError] = useState("");
+
+  useEffect(() => () => { requestId.current += 1; }, []);
+
+  function cancelPending() {
+    requestId.current += 1;
+    setIsLoading(false);
+    setCopied(false);
+    setCopyError("");
+  }
 
   const provider = getProvider(settings.selectedProvider);
   const configured = provider ? isProviderConfigured(provider, settings) : false;
 
   async function handleTranslate() {
+    const currentRequest = ++requestId.current;
     const text = sourceText.trim();
     setCopied(false);
+    setCopyError("");
 
     if (!text) {
       setError("יש להקליד או להדביק טקסט לתרגום.");
@@ -46,21 +59,28 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
 
     try {
       const result = await translateWithSettings(settings, text, settings.sourceLanguage, effectiveTarget);
+      if (currentRequest !== requestId.current) return;
       setTranslatedText(result.translatedText);
       if (settings.autoCopyResult) {
-        await writeText(result.translatedText);
-        setCopied(true);
+        try {
+          await writeText(result.translatedText);
+          if (currentRequest === requestId.current) setCopied(true);
+        } catch {
+          if (currentRequest === requestId.current) setCopyError("התרגום הושלם, אך ההעתקה ללוח נכשלה. אפשר לנסות שוב.");
+        }
       }
     } catch (err) {
+      if (currentRequest !== requestId.current) return;
       const message = err instanceof TranslationError ? err.message : "אירעה שגיאה לא צפויה בתרגום. נסה שוב.";
       setError(message);
       setTranslatedText("");
     } finally {
-      setIsLoading(false);
+      if (currentRequest === requestId.current) setIsLoading(false);
     }
   }
 
   function handleSwap() {
+    cancelPending();
     if (settings.sourceLanguage === "auto") return;
     onUpdateSettings({ sourceLanguage: settings.targetLanguage, targetLanguage: settings.sourceLanguage });
     setSourceText(translatedText);
@@ -69,11 +89,15 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
 
   async function handleCopy() {
     if (!translatedText) return;
-    await writeText(translatedText);
-    setCopied(true);
+    try {
+      await writeText(translatedText);
+      setCopied(true);
+      setCopyError("");
+    } catch { setCopyError("ההעתקה ללוח נכשלה. נסה שוב."); }
   }
 
   function handleClear() {
+    cancelPending();
     setSourceText("");
     setTranslatedText("");
     setError(null);
@@ -95,7 +119,7 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
         <select
           className="lang-select"
           value={settings.sourceLanguage}
-          onChange={(e) => onUpdateSettings({ sourceLanguage: e.target.value })}
+          onChange={(e) => { cancelPending(); onUpdateSettings({ sourceLanguage: e.target.value }); }}
           aria-label="שפת מקור"
         >
           {SOURCE_LANGUAGES.map((l) => (
@@ -119,7 +143,7 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
         <select
           className="lang-select"
           value={settings.targetLanguage}
-          onChange={(e) => onUpdateSettings({ targetLanguage: e.target.value })}
+          onChange={(e) => { cancelPending(); onUpdateSettings({ targetLanguage: e.target.value }); }}
           aria-label="שפת יעד"
         >
           {TARGET_LANGUAGES.map((l) => (
@@ -133,10 +157,12 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
       <div className="panels">
         <div className="panel">
           <textarea
+            aria-label="טקסט לתרגום"
+            dir="auto"
             className="panel__textarea"
             placeholder="הקלידו או הדביקו טקסט לתרגום…"
             value={sourceText}
-            onChange={(e) => setSourceText(e.target.value)}
+            onChange={(e) => { cancelPending(); setSourceText(e.target.value); }}
           />
         </div>
         <div className="panel panel--output">
@@ -145,7 +171,7 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
           ) : error ? (
             <p className="panel__error">{error}</p>
           ) : translatedText ? (
-            <p className="panel__result">{translatedText}</p>
+            <p className="panel__result" dir="auto">{translatedText}</p>
           ) : (
             <p className="panel__hint">התרגום יופיע כאן</p>
           )}
@@ -164,6 +190,7 @@ function TranslatorView({ settings, onUpdateSettings, onOpenSettings }: Translat
         </button>
       </div>
 
+      {copyError && <p role="status" className="panel__error">{copyError}</p>}
       <p className="shortcut-hint">אפשר גם לסמן טקסט בכל מקום במחשב וללחוץ {settings.globalShortcut}</p>
     </div>
   );
