@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, LogicalSize, Manager, Size, WebviewUrl, WebviewWindowBuilder,
 };
 use tauri_plugin_global_shortcut::ShortcutState;
 
@@ -247,6 +247,11 @@ pub fn run() {
 
             // יצירה מוקדמת (מוסתרת) של חלון הפופאפ כדי שההפעלה הראשונה תהיה מהירה.
             ensure_popup_window(&handle);
+
+            if let Some(main_window) = handle.get_webview_window(MAIN_LABEL) {
+                let _ = main_window.set_size(Size::Logical(LogicalSize { width: 540.0, height: 405.0 }));
+                let _ = main_window.center();
+            }
 
             Ok(())
         })

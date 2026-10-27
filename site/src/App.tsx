@@ -3,10 +3,10 @@ import { useState } from "react";
 const BASE = import.meta.env.BASE_URL;
 const GITHUB = "https://github.com/4pdara/QuickTranslate";
 const RELEASES = `${GITHUB}/releases`;
-const DL_BASE = `${GITHUB}/releases/download/v0.1.1`;
-const DL_SETUP = `${DL_BASE}/QuickTranslate_0.1.1_x64-setup.exe`;
-const DL_MSI = `${DL_BASE}/QuickTranslate_0.1.1_x64_en-US.msi`;
-const DL_PORTABLE = `${DL_BASE}/QuickTranslate_0.1.1_portable.zip`;
+const DL_BASE = `${GITHUB}/releases/download/v0.1.2`;
+const DL_SETUP = `${DL_BASE}/QuickTranslate_0.1.2_x64-setup.exe`;
+const DL_MSI = `${DL_BASE}/QuickTranslate_0.1.2_x64_en-US.msi`;
+const DL_PORTABLE = `${DL_BASE}/QuickTranslate_0.1.2_portable.zip`;
 const SHORTCUT = "Ctrl+Shift+T";
 
 // דוגמאות טקסט מוכנות לתרגום אינטראקטיבי
@@ -82,7 +82,7 @@ function Navbar() {
       <div className="container nav__inner">
         <a href="#" className="nav__logo" aria-label="QuickTranslate — דף הבית">
           <img src={`${BASE}brand/quicktranslate-logo.png`} alt="QuickTranslate Logo" className="nav__logo-img" />
-          <span className="nav__version-pill">v0.1.1 חדש</span>
+          <span className="nav__version-pill">v0.1.2 קומפקטי</span>
         </a>
 
         <nav className="nav__links" aria-label="ניווט ראשי">
@@ -119,7 +119,7 @@ function Hero() {
       <div className="container hero__content">
         <div className="hero__badge">
           <span className="hero__badge-pulse" />
-          <span>QuickTranslate Desktop v0.1.1 · Windows 10 & 11</span>
+          <span>QuickTranslate Desktop v0.1.2 · עיצוב קומפקטי · Windows 10 & 11</span>
         </div>
 
         <h1 className="hero__title">
@@ -665,7 +665,7 @@ function SoftwareScreenshots() {
                     <div className="tray-app-active" title="QuickTranslate פועל ברקע">
                       <img src={`${BASE}brand/quicktranslate-app-icon.png`} alt="" className="tray-qt-logo" />
                       <div className="tray-popup-menu">
-                        <div className="tray-menu-header">QuickTranslate v0.1.1</div>
+                        <div className="tray-menu-header">QuickTranslate v0.1.2</div>
                         <div className="tray-menu-item">🪟 פתח חלון ראשי</div>
                         <div className="tray-menu-item">⚙ הגדרות תוכנה</div>
                         <div className="tray-menu-divider" />
@@ -888,7 +888,7 @@ function Features() {
     {
       icon: "🌐",
       title: "Google Translate חופשי ללא מפתח",
-      desc: "גרסה v0.1.1 כוללת מנוע מעודכן לתרגום גוגל חופשי ללא צורך בהזנת כרטיס אשראי או מפתח."
+      desc: "גרסה v0.1.2 כוללת עיצוב מסך קומפקטי ומלוטש ומנוע מעודכן לתרגום גוגל חופשי ללא מפתח."
     },
     {
       icon: "🔒",
@@ -936,7 +936,7 @@ function DownloadSection() {
     <section className="section section--download" id="download">
       <div className="container">
         <div className="download-cta-card">
-          <div className="download-badge">גרסה חדשה v0.1.1 זמינה עכשיו 🚀</div>
+          <div className="download-badge">גרסה חדשה v0.1.2 — מסך קומפקטי ומעודכן 🚀</div>
           <h2 className="download-title">הורידו את QuickTranslate בחינם</h2>
           <p className="download-sub">
             האפליקציה חופשית לחלוטין, קוד פתוח, ללא הרשמה וללא פרסומות. בחרו את פורמט ההתקנה המועדף עליכם:

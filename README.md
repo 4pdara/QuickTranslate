@@ -15,9 +15,9 @@
 
 | קובץ | תיאור |
 |---|---|
-| [QuickTranslate_0.1.1_x64-setup.exe](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.1/QuickTranslate_0.1.1_x64-setup.exe) | Windows Installer (מומלץ) |
-| [QuickTranslate_0.1.1_x64_en-US.msi](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.1/QuickTranslate_0.1.1_x64_en-US.msi) | MSI Installer |
-| [QuickTranslate_0.1.1_portable.zip](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.1/QuickTranslate_0.1.1_portable.zip) | גרסה ניידת (ללא התקנה) |
+| [QuickTranslate_0.1.2_x64-setup.exe](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.2/QuickTranslate_0.1.2_x64-setup.exe) | Windows Installer (מומלץ) |
+| [QuickTranslate_0.1.2_x64_en-US.msi](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.2/QuickTranslate_0.1.2_x64_en-US.msi) | MSI Installer |
+| [QuickTranslate_0.1.2_portable.zip](https://github.com/4pdara/QuickTranslate/releases/download/v0.1.2/QuickTranslate_0.1.2_portable.zip) | גרסה ניידת (ללא התקנה) |
 
 > **למשתמשי קצה:** אין צורך ב-Rust, Node, npm, או כל כלי פיתוח. פשוט הורידו והריצו את ה-installer.
 > הגרסה הניידת (portable) רצה ישירות ללא התקנה — דורשת WebView2 שמובנה ב-Windows 11 ו-Windows 10 מעודכן.
@@ -71,8 +71,8 @@ npm run tauri build
 ```
 
 מייצר:
-- `src-tauri/target/release/bundle/nsis/QuickTranslate_0.1.1_x64-setup.exe`
-- `src-tauri/target/release/bundle/msi/QuickTranslate_0.1.1_x64_en-US.msi`
+- `src-tauri/target/release/bundle/nsis/QuickTranslate_0.1.2_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/QuickTranslate_0.1.2_x64_en-US.msi`
 - `src-tauri/target/release/tauri-app.exe` ← גרסה ניידת (rename ל-QuickTranslate.exe)
 
 ## אתר הנחיתה
