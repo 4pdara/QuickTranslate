@@ -36,6 +36,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoCopyResult: false,
   popupPosition: "center",
   captureSelectedTextWithoutClipboard: true,
-  allowClipboardFallbackForSelectedText: false,
+  allowClipboardFallbackForSelectedText: true,
   allowUnchangedClipboardFallback: true,
 };

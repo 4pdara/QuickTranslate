@@ -40,7 +40,7 @@ fn capture_selected_text_without_clipboard(app: &AppHandle) -> bool {
 
 /// "אם לא הצליח — השתמש בלוח ההעתקה" (Ctrl+C fallback). ברירת מחדל: לא.
 fn allow_clipboard_fallback_for_selected_text(app: &AppHandle) -> bool {
-    read_setting(app, "allowClipboardFallbackForSelectedText", |v| v.as_bool()).unwrap_or(false)
+    read_setting(app, "allowClipboardFallbackForSelectedText", |v| v.as_bool()).unwrap_or(true)
 }
 
 /// "תרגם גם אם הלוח לא השתנה" — תקף רק כתת-הגדרה של ה-fallback ללוח.

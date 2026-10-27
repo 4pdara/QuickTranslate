@@ -27,8 +27,23 @@ export async function loadSettings(): Promise<AppSettings> {
     return { ...DEFAULT_SETTINGS };
   }
   const store = await getStore();
-  const saved = await store.get<Partial<AppSettings>>(SETTINGS_KEY);
-  return { ...DEFAULT_SETTINGS, ...saved };
+  const saved = (await store.get<Partial<AppSettings>>(SETTINGS_KEY)) ?? {};
+  const settings: AppSettings = { ...DEFAULT_SETTINGS, ...saved };
+
+  // מיגרציה אוטומטית: הבטחה ש-fallback ללוח פועל כדי שתרגום טקסט יעבוד בכל האפליקציות והאתרים
+  const hasMigrated = await store.get<boolean>("fallback_migrated_v013");
+  if (!hasMigrated) {
+    settings.allowClipboardFallbackForSelectedText = true;
+    settings.allowUnchangedClipboardFallback = true;
+    if (settings.selectedProvider === "libretranslate") {
+      settings.selectedProvider = "google_translate_no_api";
+    }
+    await store.set("fallback_migrated_v013", true);
+    await store.set(SETTINGS_KEY, settings);
+    await store.save();
+  }
+
+  return settings;
 }
 
 let saveQueue: Promise<void> = Promise.resolve();
